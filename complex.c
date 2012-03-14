@@ -13,18 +13,6 @@ int QUDA_BRANCH_CUT_LOWER = -1.0*QUDA_PI;
 int QUDA_BRANCH_CUT_UPPER = QUDA_PI;
 #endif
 
-/*
-int main() { // testing only
-	complex_t op1,op2;
-	op1.real = 1;
-	op1.imag = 1;
-	op2.real = 2;
-	op2.imag = -0.5;
-	quda_complex_add(op1,op2);
-	return 0;
-};
-*/
-
 #ifdef __QUDA_USE_BRANCH_CUT
 void quda_complex_set_branch_cut(float lower) {
 	QUDA_BRANCH_CUT_LOWER = lower;

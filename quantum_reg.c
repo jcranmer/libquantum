@@ -3,6 +3,7 @@
 
 #include "quantum_reg.h"
 #include <stdlib.h>
+#include <math.h>
 
 int quda_quantum_reg_init(quantum_reg* qreg, int qubits) {
 	qreg->qubits = qubits;
@@ -24,6 +25,125 @@ void quda_quantum_reg_set(quantum_reg* qreg, uint64_t state) {
 
 void quda_quantum_reg_delete(quantum_reg* qreg) {
 	free(qreg->states);
+}
+
+void quda_quantum_bit_set(int target, quantum_reg* qreg) {
+	int i;
+	uint64_t mask = 1 << target;
+	for(i=0;i<qreg->num_states;i++) {
+		qreg->states[i].state = qreg->states[i].state | mask;
+	}
+
+	quda_quantum_reg_coalesce(qreg);
+}
+
+void quda_quantum_bit_reset(int target, quantum_reg* qreg) {
+	int i;
+	uint64_t mask = ~(1 << target);
+	for(i=0;i<qreg->num_states;i++) {
+		qreg->states[i].state = qreg->states[i].state & mask;
+	}
+
+	quda_quantum_reg_coalesce(qreg);
+}
+
+/* Performs a measurement on the quantum register */
+int quda_quantum_reg_measure(quantum_reg* qreg, uint64_t* retval) {
+	if(retval == NULL) return -2;
+	float f = quda_rand_float();
+	int i;
+	for(i=0;i<qreg->num_states;i++) {
+		if(!quda_complex_eq(qreg->states[i].amplitude,QUDA_COMPLEX_ZERO)) {
+			f -= quda_complex_abs_square(qreg->states[i].amplitude);
+			if(f < 0) {
+				*retval = qreg->states[i].state;
+				return 0;
+			}
+		}
+	}
+
+	return -1;
+}
+
+/* Performs a real-world quantum measurement.
+ * The register collapses to the physical state measured with probability 1.
+ */
+int quda_quantum_reg_measure_and_collapse(quantum_reg* qreg, uint64_t* retval) {
+	if(retval == NULL) return -2;
+	float f = quda_rand_float();
+	int i;
+	for(i=0;i<qreg->num_states;i++) {
+		if(!quda_complex_eq(qreg->states[i].amplitude,QUDA_COMPLEX_ZERO)) {
+			f -= quda_complex_abs_square(qreg->states[i].amplitude);
+			if(f < 0) {
+				*retval = qreg->states[i].state;
+				qreg->states[0].state = qreg->states[i].state;
+				qreg->states[0].amplitude = QUDA_COMPLEX_ONE;
+				qreg->num_states = 1;
+				return 0;
+			}
+		}
+	}
+
+	return -1;
+}
+
+/* Measure 1 bit of a quantum register */
+int quda_quantum_bit_measure(int target, quantum_reg* qreg) {
+	float p = 0;
+	float f = quda_rand_float();
+	uint64_t mask = 1 << target;
+	int i;
+	// Accumulate probability that the bit is in state |1>
+	for(i = 0;i<qreg->num_states;i++) {
+		if(qreg->states[i].state & mask) {
+			p += quda_complex_abs_square(qreg->states[i].amplitude);
+			// TODO: Determine overhead of this comparison
+			if(p > quda_rand_float()) return 1;
+		}
+	}
+
+	return 0;
+	//return quda_rand_float() < p ? 1 : 0;
+}
+
+int quda_quantum_bit_measure_and_collapse(int target, quantum_reg* qreg) {
+	// Measure bit conventionally
+	// TODO: Can allow probability measurement from conventional to complete and remove it below
+	int retval = quda_quantum_bit_measure(target,qreg);
+
+	// Collapse states to those possible
+	uint64_t mask = 1 << target;
+	float p = 0;
+	int i;
+	for(i=0;i<qreg->num_states;i++) {
+		// TODO: Ideally, remove nested conditions
+		// TODO: Actually prune in this loop instead of just invalidating
+		if(qreg->states[i].state & mask) {
+			if(retval) { // this is a valid state, accumulate probability to renormalize
+				p += quda_complex_abs_square(qreg->states[i].amplitude);
+			} else { // this is an invalid state -- nullify
+				qreg->states[i].amplitude = QUDA_COMPLEX_ZERO;
+			}
+		} else {
+			if(!retval) { // valid state, accumulate probability
+				p += quda_complex_abs_square(qreg->states[i].amplitude);
+			} else { // invalid state -- nullify
+				qreg->states[i].amplitude = QUDA_COMPLEX_ZERO;
+			}
+		}
+	}
+
+	// TODO: Remove this call for optimization within the above loop
+	quda_quantum_reg_prune(qreg);
+
+	// Renormalize
+	float k = sqrt(1.0f/p);
+	for(i=0;i<qreg->num_states;i++) {
+		qreg->states[i].amplitude = quda_complex_rmul(qreg->states[i].amplitude,k);
+	}
+
+	return retval;
 }
 
 void quda_quantum_reg_prune(quantum_reg* qreg) {
@@ -110,6 +230,10 @@ int quda_quantum_reg_trim(quantum_reg* qreg) {
 	}
 
 	return 0;
+}
+
+float quda_rand_float() {
+	return rand()/(float)RAND_MAX;
 }
 
 int qstate_compare(const void* qstate1, const void* qstate2) {

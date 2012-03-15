@@ -95,7 +95,7 @@ void quda_quantum_swap_gate(int target1, int target2, quantum_reg* qreg) {
 	uint64_t mask = 1 << target1;
 	mask |= 1 << target2;
 	for(i=0;i<qreg->num_states;i++) {
-		if((qreg->states[i].state & mask != 0) && (~qreg->states[i].state & mask != 0)) {
+		if((qreg->states[i].state & mask) != 0 && (~qreg->states[i].state & mask) != 0) {
 			qreg->states[i].state = qreg->states[i].state ^ mask;
 		}
 	}
@@ -159,8 +159,8 @@ void quda_quantum_fredkin_gate(int control, int target1, int target2, quantum_re
 	uint64_t tmask = 1 << target1;
 	tmask |= 1 << target2;
 	for(i=0;i<qreg->num_states;i++) {
-		if((qreg->states[i].state & cmask) && (qreg->states[i].state & tmask != 0)
-				&& (~qreg->states[i].state & tmask != 0)) {
+		if((qreg->states[i].state & cmask) && (qreg->states[i].state & tmask) != 0
+				&& (~qreg->states[i].state & tmask) != 0) {
 			qreg->states[i].state = qreg->states[i].state ^ tmask;
 		}
 	}

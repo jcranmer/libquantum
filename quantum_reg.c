@@ -91,7 +91,7 @@ int quda_quantum_reg_measure_and_collapse(quantum_reg* qreg, uint64_t* retval) {
 /* Measure 1 bit of a quantum register */
 int quda_quantum_bit_measure(int target, quantum_reg* qreg) {
 	float p = 0;
-	float f = quda_rand_float();
+	//float f = quda_rand_float();
 	uint64_t mask = 1 << target;
 	int i;
 	// Accumulate probability that the bit is in state |1>

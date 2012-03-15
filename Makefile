@@ -1,5 +1,5 @@
 CC=gcc -std=c99
-CFLAGS=-g
+CFLAGS=-g -Wall -Werror -pedantic
 LDFLAGS=-lm
 
 all: libquantum.a

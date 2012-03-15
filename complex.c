@@ -58,6 +58,7 @@ float quda_complex_arg(complex_t c) {
 	while(res <= QUDA_BRANCH_CUT_LOWER) res+=2*QUDA_PI;
 	while(res > QUDA_BRANCH_CUT_UPPER) res-=2*QUDA_PI;
 	#endif
+  return res;
 }
 
 complex_t quda_complex_conj(complex_t c) {
@@ -191,6 +192,7 @@ complex_t quda_complex_log(complex_t c) {
 	complex_t res;
 	res.real = log(quda_complex_abs(c));
 	res.imag = quda_complex_arg(c);
+  return res;
 }
 
 // TODO: Unwrap some of the complex trig calls (&| hyperbolics) to optimize (especially tan)

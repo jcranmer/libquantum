@@ -35,6 +35,10 @@ int quda_complex_eq(complex_t op1, complex_t op2) {
 	return 0;
 }
 
+float quda_complex_abs_square(complex_t c) {
+	return c.real*c.real + c.imag*c.imag;
+}
+
 float quda_complex_abs(complex_t c) {
 	float res = c.real*c.real + c.imag*c.imag;
 	return sqrt(res);

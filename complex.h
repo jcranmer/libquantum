@@ -32,6 +32,13 @@ complex_t quda_complex_copy(complex_t c);
 /* Test equality of two complex numbers (returns 1 if equal, 0 otherwise) */
 int quda_complex_eq(complex_t op1, complex_t op2);
 
+/* Complex absolute square
+ * Equivalent to a complex number times its conjugate
+ * For a quantum state amplitude, this value represents the probability
+ * of the quantum state.
+ */
+float quda_complex_abs_square(complex_t c);
+
 /* Complex modulus (absolute value) */
 float quda_complex_abs(complex_t c);
 

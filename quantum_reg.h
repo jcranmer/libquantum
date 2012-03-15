@@ -29,13 +29,53 @@ typedef struct quantum_reg {
  */
 int quda_quantum_reg_init(quantum_reg* qreg, int qubits);
 
-/* Sets the register to a single physical state with probability 1. */
-void quda_quantum_reg_set(quantum_reg* qreg, uint64_t state);
-
 /* Frees the given register for deletion. 
  * If the passed qreg was dynamically allocated, it must still be freed separately.
  */
 void quda_quantum_reg_delete(quantum_reg* qreg);
+
+/* Sets the register to a single physical state with probability 1. */
+void quda_quantum_reg_set(quantum_reg* qreg, uint64_t state);
+
+/* Sets a single bit of a quantum register to 1 with probability 1.
+ * If the system is in a superposition, it is collapsed into the subset
+ * of possible states allowed by this value.
+ */
+void quda_quantum_bit_set(int target, quantum_reg* qreg);
+
+/* Sets a single bit of a quantum register to 0 with probability 1.
+ * If the system is in a superposition, it is collapsed into the subset
+ * of possible states allowed by this value.
+ */
+void quda_quantum_bit_reset(int target, quantum_reg* qreg);
+
+/* Performs a measurement on the quantum register and stores the state
+ * in 'retval' if non-NULL.
+ * Returns 0 on success, -1 on retval NULL, -2 on normalization error.
+ */
+// TODO: Attempt correction for minor normalization errors (ie floating point precision errors)
+int quda_quantum_reg_measure(quantum_reg* qreg, uint64_t* retval);
+
+/* Performs a real-world quantum measurement and stores the state in 
+ * 'retval' if non-NULL.
+ * On success, returns 0 and the register collapses to the physical state
+ * measured with probability 1.
+ * On failure, does not collapse. Returns -1 on retval NULL, -2 on
+ * normalization error.
+ */
+// TODO: Attempt correction for minor normalization errors (ie floating point precision errors)
+int quda_quantum_reg_measure_and_collapse(quantum_reg* qreg, uint64_t* retval);
+
+/* Measure 1 bit of a quantum register */
+int quda_quantum_bit_measure(int target, quantum_reg* qreg);
+
+/* Perform a real-world quantum measurement of 1 quantum register bit.
+ * The system collapses into the subset of possible states allowed by
+ * the value of the measured bit.
+ * Simultaneously prunes zero-amplitude states.
+ * Does not coalesce identical states.
+ */
+int quda_quantum_bit_measure_and_collapse(int target, quantum_reg* qreg);
 
 /* Removes zero-amplitude states from the register. */
 void quda_quantum_reg_prune(quantum_reg* qreg);
@@ -59,6 +99,11 @@ void quda_quantum_reg_coalesce(quantum_reg* qreg);
  */
 int quda_quantum_reg_trim(quantum_reg* qreg);
 
+/* Generates a float in the range [0,1) */
+// TODO: Look at performance implications of using 'double' here
+float quda_rand_float();
+
+/* Comparator for sorting the quantum_state array */
 int qstate_compare(const void* qstate1, const void* qstate2);
 
 #endif // __QUDA_QUANTUM_REG_H

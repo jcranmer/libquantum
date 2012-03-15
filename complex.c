@@ -99,7 +99,7 @@ complex_t quda_complex_rmul(complex_t c, float f) {
 complex_t quda_complex_rdiv(complex_t c, float f) {
 	complex_t res;
 	res.real = c.real/f;
-	res.imag = c.real/f;
+	res.imag = c.imag/f;
 	return res;
 }
 

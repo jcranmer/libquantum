@@ -17,6 +17,31 @@
     printf("PASS TEST " explain "\n"); \
   } while(0)
 
+#define VERIFY_REGISTER(qureg, nbits, check, func) \
+  do { \
+    unsigned verified = (1U << (1U << nbits)) - 1; \
+    float total_probability = 0; \
+    for (int s = 0; s < qureg.num_states; s++) { \
+      complex_t *amplitude = &qureg.states[s].amplitude; \
+      int state = qureg.states[s].state; \
+      if ((verified & (1U << state)) == 0) { \
+        printf("FAIL: state %d seen multiple times\n", state); \
+      } \
+      verified &= ~(1U << state); \
+      complex_t *entry = &check[state]; \
+      printf("Checking projection onto state |%d>\n", state); \
+      CHECK_COMPLEX_RESULT(*amplitude, entry->real, entry->imag, \
+        "Verifying gate " #func); \
+      printf("Value: %.3f + %.3fi\n", amplitude->real, amplitude->imag); \
+      total_probability += quda_complex_abs_square(*amplitude); \
+    } \
+    if (fabs(total_probability - 1) > 1e-3) { \
+      printf("FAIL TEST verifying gate " #func ": Saw only %d (unseen: %x)\n", \
+        qureg.num_states, verified); \
+      printf("FAIL TEST verifying gate " #func ": total probability: %.3f\n", \
+        (double)total_probability); \
+    } \
+  } while (0)
 
 #define INVOKE1 0
 #define INVOKE2 1, 0
@@ -31,29 +56,26 @@ do { \
     quda_quantum_reg_set(&qureg, i); \
     func(INVOKE##nbits, &qureg); \
     printf("Testing " #func " with basis |%d>\n", i); \
-    /* Check all of the states to see if they are correct */ \
-    unsigned verified = (1U << (1U << nbits)) - 1; \
-    float total_probability = 0; \
-    for (int s = 0; s < qureg.num_states; s++) { \
-      complex_t *amplitude = &qureg.states[s].amplitude; \
-      int state = qureg.states[s].state; \
-      if ((verified & (1U << state)) == 0) { \
-        printf("FAIL: state %d seen multiple times\n", state); \
-      } \
-      verified &= ~(1U << state); \
-      complex_t *entry = &matrix[i][state]; \
-      printf("Checking projection onto state |%d>\n", state); \
-      CHECK_COMPLEX_RESULT(*amplitude, entry->real, entry->imag, \
-        "Verifying gate " #func); \
-      total_probability += quda_complex_abs_square(*amplitude); \
-    } \
-    if (fabs(total_probability - 1) > 1e-3) { \
-      printf("FAIL TEST verifying gate " #func ": Saw only %d (unseen: %x)\n", \
-        qureg.num_states, verified); \
-      printf("FAIL TEST verifying gate " #func ": total probability: %.3f\n", \
-        (double)total_probability); \
-    } \
+    VERIFY_REGISTER(qureg, nbits, matrix[i], func); \
   } \
+  /* How does it map the uniform state? */ \
+  complex_t uniform[1 << nbits]; \
+  int newsize = (1 << nbits) - qureg.size; \
+  quda_quantum_reg_enlarge(&qureg, &newsize); \
+  qureg.num_states = 1 << nbits; \
+  for (int i = 0; i < (1 << nbits); i++) { \
+    float div = sqrt(1 << nbits); \
+    uniform[i] = QUDA_COMPLEX_ZERO; \
+    for (int j = 0; j < (1 << nbits); j++) { \
+      uniform[i] = quda_complex_add(uniform[i], matrix[j][i]); \
+    } \
+    uniform[i] = quda_complex_rdiv(uniform[i], div); \
+    qureg.states[i].state = i; \
+    qureg.states[i].amplitude = quda_complex_rdiv(QUDA_COMPLEX_ONE, div); \
+  } \
+  func(INVOKE##nbits, &qureg); \
+  printf("Testing " #func " with uniform distribution\n"); \
+  VERIFY_REGISTER(qureg, nbits, uniform, func); \
   quda_quantum_reg_delete(&qureg); \
 } while (0)
 

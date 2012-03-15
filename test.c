@@ -19,8 +19,8 @@
 
 
 #define INVOKE1 0
-#define INVOKE2 0, 1
-#define INVOKE3 0, 1, 2
+#define INVOKE2 1, 0
+#define INVOKE3 2, 1, 0
 #define TEST_GATE(nbits, func, ...) \
 do { \
   static complex_t matrix[2 * nbits][2 * nbits] = __VA_ARGS__; \
@@ -38,10 +38,11 @@ do { \
       complex_t *amplitude = &qureg.states[s].amplitude; \
       int state = qureg.states[s].state; \
       if ((verified & (1U << state)) == 0) { \
-        printf("FAIL: state %x seen multiple times\n", state); \
+        printf("FAIL: state %d seen multiple times\n", state); \
       } \
       verified &= ~(1U << state); \
       complex_t *entry = &matrix[i][state]; \
+      printf("Checking projection onto state |%d>\n", state); \
       CHECK_COMPLEX_RESULT(*amplitude, entry->real, entry->imag, \
         "Verifying gate " #func); \
       total_probability += quda_complex_abs_square(*amplitude); \
@@ -89,6 +90,18 @@ int main(int argc, char** argv) {
      {{0,0},{1,0},{0,0},{0,0}},
      {{0,0},{0,0},{0,0},{1,0}},
      {{0,0},{0,0},{1,0},{0,0}}});
+  TEST_GATE(2, quda_quantum_controlled_y_gate,
+    {{{1,0},{0,0},{0,0},{0,0}},
+     {{0,0},{1,0},{0,0},{0,0}},
+     {{0,0},{0,0},{0,0},{0,-1}},
+     {{0,0},{0,0},{0,1},{0,0}}});
+  TEST_GATE(2, quda_quantum_controlled_z_gate,
+    {{{1,0},{0,0},{0,0},{0,0}},
+     {{0,0},{1,0},{0,0},{0,0}},
+     {{0,0},{0,0},{1,0},{0,0}},
+     {{0,0},{0,0},{0,0},{-1,0}}});
+
+
 	// Quantum Register
 	quantum_reg qreg;
 	if(quda_quantum_reg_init(&qreg,16) == -1) return -1;

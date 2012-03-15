@@ -135,7 +135,7 @@ void quda_quantum_controlled_z_gate(int control, int target, quantum_reg* qreg) 
 	uint64_t mask = 1 << control;
 	mask |= 1 << target;
 	for(i=0;i<qreg->num_states;i++) {
-		if(qreg->states[i].state & mask) {
+		if((qreg->states[i].state & mask) == mask) {
 			qreg->states[i].amplitude = quda_complex_neg(qreg->states[i].amplitude);
 		}
 	}

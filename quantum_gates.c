@@ -29,6 +29,8 @@ int quda_quantum_hadamard_gate(int target, quantum_reg* qreg) {
 		}
 	}
 
+	qreg->num_states = 2*qreg->num_states;
+
 	// TODO: Ideally, make this call optional or conditional
 	quda_quantum_reg_coalesce(qreg);
 

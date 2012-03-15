@@ -147,7 +147,7 @@ void quda_quantum_toffoli_gate(int control1, int control2, int target, quantum_r
 	cmask |= 1 << control2;
 	uint64_t tmask = 1 << target;
 	for(i=0;i<qreg->num_states;i++) {
-		if(qreg->states[i].state & cmask) {
+		if((qreg->states[i].state & cmask) == cmask) {
 			qreg->states[i].state = qreg->states[i].state ^ tmask;
 		}
 	}
@@ -159,7 +159,8 @@ void quda_quantum_fredkin_gate(int control, int target1, int target2, quantum_re
 	uint64_t tmask = 1 << target1;
 	tmask |= 1 << target2;
 	for(i=0;i<qreg->num_states;i++) {
-		if((qreg->states[i].state & cmask) && (qreg->states[i].state & tmask) != 0
+		if((qreg->states[i].state & cmask) == cmask
+        && (qreg->states[i].state & tmask) != 0
 				&& (~qreg->states[i].state & tmask) != 0) {
 			qreg->states[i].state = qreg->states[i].state ^ tmask;
 		}

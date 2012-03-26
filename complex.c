@@ -113,7 +113,7 @@ complex_t quda_complex_add(complex_t op1, complex_t op2) {
 complex_t quda_complex_sub(complex_t op1, complex_t op2) {
 	complex_t res;
 	res.real = op1.real - op2.real;
-	res.imag = op2.imag - op2.imag;
+	res.imag = op1.imag - op2.imag;
 	return res;
 }
 
@@ -164,11 +164,15 @@ complex_t quda_complex_exp(complex_t c) {
 
 // TODO: compare performance of quda_complex_ipow functions
 complex_t quda_complex_ipow(complex_t c,int p) {
-	float r2 = pow(quda_complex_abs(c),p);
-	float theta = p*quda_complex_arg(c);
 	complex_t res;
-	res.real = r2*cos(theta);
-	res.imag = r2*sin(theta);
+	if(quda_complex_eq(c,QUDA_COMPLEX_ZERO)) {
+		res = QUDA_COMPLEX_ZERO;
+	} else {
+		float r2 = pow(quda_complex_abs(c),p);
+		float theta = p*quda_complex_arg(c);
+		res.real = r2*cos(theta);
+		res.imag = r2*sin(theta);
+	}
 	return res;
 }
 

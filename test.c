@@ -63,16 +63,20 @@ do { \
   int newsize = (1 << nbits) - qureg.size; \
   quda_quantum_reg_enlarge(&qureg, &newsize); \
   qureg.num_states = 1 << nbits; \
+  float sum = 0.0f; \
   for (int i = 0; i < (1 << nbits); i++) { \
     float div = sqrt(1 << nbits); \
     uniform[i] = QUDA_COMPLEX_ZERO; \
     for (int j = 0; j < (1 << nbits); j++) { \
       uniform[i] = quda_complex_add(uniform[i], matrix[j][i]); \
     } \
-    uniform[i] = quda_complex_rdiv(uniform[i], div); \
+    sum += quda_complex_abs_square(uniform[i]); \
     qureg.states[i].state = i; \
     qureg.states[i].amplitude = quda_complex_rdiv(QUDA_COMPLEX_ONE, div); \
   } \
+  sum = sqrt(sum); \
+  for (int i = 0; i < (1 << nbits); i++) \
+    uniform[i] = quda_complex_rdiv(uniform[i], sum); \
   func(INVOKE##nbits, &qureg); \
   printf("Testing " #func " with uniform distribution\n"); \
   VERIFY_REGISTER(qureg, nbits, uniform, func); \

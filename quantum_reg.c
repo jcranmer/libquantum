@@ -158,11 +158,11 @@ void quda_quantum_reg_prune(quantum_reg* qreg) {
 			if(i < end) {
 				qreg->states[i] = qreg->states[end];
 			} else {
+				qreg->num_states = i;
 				break;
 			}
 		}
 	}
-	qreg->num_states = end+1;
 }
 
 int quda_quantum_reg_enlarge(quantum_reg* qreg,int* amount) {
@@ -237,7 +237,10 @@ float quda_rand_float() {
 }
 
 int qstate_compare(const void* qstate1, const void* qstate2) {
-	uint64_t diff = ((quantum_state_t*)qstate1)->state - ((quantum_state_t*)qstate2)->state;
-	if(diff == 0) return 0;
-	return diff > 0 ? 1 : -1;
+	uint64_t s1 = ((quantum_state_t*)qstate1)->state;
+	uint64_t s2 = ((quantum_state_t*)qstate2)->state;
+	if(s1 == s2) {
+		return 0;
+	}
+	return (s1 < s2) ? -1 : 1;
 }

@@ -253,19 +253,21 @@ int quda_quantum_bit_measure_and_collapse(int target, quantum_reg* qreg) {
 void quda_quantum_reg_prune(quantum_reg* qreg) {
 	int i,end;
 	for(i=0,end=qreg->num_states-1;i < end;i++) {
-		//printf("PRUNE: state[%d].amp = (%f,%f)\n",i,qreg->states[i].amplitude.real,qreg->states[i].amplitude.imag); // DEBUG
 		if(quda_complex_eq(qreg->states[i].amplitude,QUDA_COMPLEX_ZERO)) {
-			//printf("EQZ: state[%d].amp = (%f,%f)\n",i,qreg->states[i].amplitude.real,qreg->states[i].amplitude.imag); // DEBUG
 			while(quda_complex_eq(qreg->states[end].amplitude,QUDA_COMPLEX_ZERO)) {
 				end--;
-				if(i == end) {
+				if(i == end) { // if no non-zero elements to copy
 					break;	
 				}
 			}
 
 			if(i < end) {
+				// non-zero element found, copy it
 				qreg->states[i] = qreg->states[end--];
+				// NOTE: Next line can be avoided by using 'end' instead of 'i' to set 'num_states'
+				//if(i == end) break; // allowing i to increment can cause 'num_states' errors
 			} else {
+				// algorithm is done, need to set length to i
 				break;
 			}
 		}
@@ -273,9 +275,9 @@ void quda_quantum_reg_prune(quantum_reg* qreg) {
 
 	printf("PRUNE: Reduced states from %d ",qreg->num_states); // DEBUG
 	if(quda_complex_eq(qreg->states[i].amplitude,QUDA_COMPLEX_ZERO)) {
-		qreg->num_states = i;
+		qreg->num_states = end;
 	} else {
-		qreg->num_states = i+1;
+		qreg->num_states = end+1;
 	}
 	printf("to %d\n",qreg->num_states); // DEBUG
 	if(quda_complex_eq(qreg->states[qreg->num_states-1].amplitude,QUDA_COMPLEX_ZERO)) {
@@ -314,23 +316,20 @@ int quda_quantum_reg_enlarge(quantum_reg* qreg,int* amount) {
 void quda_quantum_reg_coalesce(quantum_reg* qreg) {
 	if(qreg->num_states < 2) return;
 	qsort(qreg->states,qreg->num_states,sizeof(quantum_state_t),qstate_compare);
-	//printf("old states: %d\n",qreg->num_states); // DEBUG
+	//printf("COALESCE: old states: %d\n",qreg->num_states); // DEBUG
 
 	int i,j;
 	int renorm = 0;
 	for(i=1,j=0;i<qreg->num_states;i++) {
 		if(qreg->states[j].state == qreg->states[i].state) {
-			// DEBUG BLOCK
+			/*// DEBUG BLOCK
 			printf("coalescing states %d and %d.\n",j,i);
 			printf("amplitude grows from (%f,%f) to ",qreg->states[j].amplitude.real,
 					qreg->states[j].amplitude.imag);
-			// END DEBUG BLOCK
+			*/// END DEBUG BLOCK
 			renorm |= quda_amplitude_coalesce(&qreg->states[j].amplitude,
 					&qreg->states[i].amplitude);
-			//qreg->states[j].amplitude = quda_complex_add(qreg->states[j].amplitude,
-			//		qreg->states[i].amplitude);
-			printf("(%f,%f)\n",qreg->states[j].amplitude.real,qreg->states[j].amplitude.imag); // DEBUG
-			//qreg->states[i].amplitude = QUDA_COMPLEX_ZERO;
+			//printf("(%f,%f) (state[%d])\n",qreg->states[j].amplitude.real,qreg->states[j].amplitude.imag,j); // DEBUG
 		} else {
 			j = i;
 		}
@@ -342,7 +341,7 @@ void quda_quantum_reg_coalesce(quantum_reg* qreg) {
 
 	// TODO: Optimize pruning into the above pass or make it optional/conditional
 	quda_quantum_reg_prune(qreg);
-	//printf("new states: %d\n",qreg->num_states); // DEBUG
+	//printf("COALESCE: new states: %d\n",qreg->num_states); // DEBUG
 }
 
 int quda_quantum_reg_trim(quantum_reg* qreg) {

@@ -57,7 +57,7 @@ int quda_quantum_hadamard_gate(int target, quantum_reg* qreg) {
 		}
 	}
 	printf("sum of all probabilties: %f\n",p);
-	// END DEBUG BLOCK*/
+	*/// END DEBUG BLOCK
 
 	// TODO: Ideally, make this call optional or conditional
 	quda_quantum_reg_coalesce(qreg);
@@ -78,7 +78,7 @@ int quda_quantum_hadamard_gate(int target, quantum_reg* qreg) {
 	}
 	printf("sum of all probabilties: %f\n",p);
 	if(err == 0) printf("No problem within Hadamard gate.\n");
-	// END DEBUG BLOCK*/
+	*/// END DEBUG BLOCK
 
 	return 0;
 }

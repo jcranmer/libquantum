@@ -84,9 +84,12 @@ int main(int argc, char** argv) {
 	/* libquantum measures all of its scratch bits here for some reason.
 	 * Presumedly, this reduces memory overhead by finding the single most likely value of
 	 * x^(hadamarded-input) % n. Thus their qreg would be left with only inputs that correspond
-	 * to the most likely output. Comment the next line for the opposite effect (no coalescing).
+	 * to the most likely output. It may also be a correctness issue since they use the least
+	 * significant register bits to store scratch (with no differentiation from regular bits).
+	 * Comment the next line for the opposite effect (no coalescing).
 	 */
-	quda_quantum_collapse_scratch(&qr1);
+	//quda_quantum_collapse_scratch(&qr1);
+	quda_quantum_clear_scratch(&qr1);
 
 	/* DEBUG */
 	err = quda_check_normalization(&qr1);
@@ -94,7 +97,7 @@ int main(int argc, char** argv) {
 	if(err != 0) {
 		printf("ERROR: ");
 	}
-	printf("After quda_classical_exp_mod_n()\n");
+	printf("After quantum_collapse_scratch()\n");
 	printf("Going into quantum_fourier_transform()\n");
 	//quda_quantum_reg_dump(&qr1,"BEFORE_FOURIER");
 	/* END DEBUG */

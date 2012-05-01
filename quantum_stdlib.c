@@ -95,7 +95,7 @@ void quda_quantum_fourier_transform(quantum_reg* qreg) {
 			}
 			// END DEBUG BLOCK
 		}
-		printf("Performing hadamard(bit %d), state[0].biti = %d\n",i,((1 << i) & qreg->states[0].state) != 0); // DEBUG
+		printf("Performing hadamard(bit %d)\n",i); // DEBUG
 		quda_quantum_hadamard_gate(i,qreg);
 		// DEBUG BLOCK
 		int err = quda_weak_check_amplitudes(qreg);

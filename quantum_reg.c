@@ -253,7 +253,9 @@ int quda_quantum_bit_measure_and_collapse(int target, quantum_reg* qreg) {
 void quda_quantum_reg_prune(quantum_reg* qreg) {
 	int i,end;
 	for(i=0,end=qreg->num_states-1;i < end;i++) {
+		//printf("PRUNE: state[%d].amp = (%f,%f)\n",i,qreg->states[i].amplitude.real,qreg->states[i].amplitude.imag); // DEBUG
 		if(quda_complex_eq(qreg->states[i].amplitude,QUDA_COMPLEX_ZERO)) {
+			//printf("EQZ: state[%d].amp = (%f,%f)\n",i,qreg->states[i].amplitude.real,qreg->states[i].amplitude.imag); // DEBUG
 			while(quda_complex_eq(qreg->states[end].amplitude,QUDA_COMPLEX_ZERO)) {
 				end--;
 				if(i == end) { // if no non-zero elements to copy
@@ -317,7 +319,6 @@ void quda_quantum_reg_coalesce(quantum_reg* qreg) {
 	if(qreg->num_states < 2) return;
 	qsort(qreg->states,qreg->num_states,sizeof(quantum_state_t),qstate_compare);
 	//printf("COALESCE: old states: %d\n",qreg->num_states); // DEBUG
-
 	int i,j;
 	int renorm = 0;
 	for(i=1,j=0;i<qreg->num_states;i++) {

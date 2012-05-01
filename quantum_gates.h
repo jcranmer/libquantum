@@ -43,6 +43,12 @@ void quda_quantum_phase_gate(int target, quantum_reg* qreg);
  */
 void quda_quantum_pi_over_8_gate(int target, quantum_reg* qreg);
 
+/* Applies the quantum Rotate_k gate to the target bit of a quantum register.
+ * Arbitrary rotation gate used primarily in computing the quantum Fourier transform.
+ * k = 3 is effectively the PI/8 gate.
+ */
+void quda_quantum_rotate_k_gate(int target, quantum_reg* qreg, int k);
+
 // Two-bit quantum gates
 
 /* Applies the quantum Swap gate to exchange the states of the two target bits of a 
@@ -65,6 +71,16 @@ void quda_quantum_controlled_y_gate(int control,int target, quantum_reg* qreg);
  * control bit is set.
  */
 void quda_quantum_controlled_z_gate(int control, int target, quantum_reg* qreg);
+
+/* Applies the Controlled-Phase gate to the target bit of a quantum register if the
+ * control bit is set.
+ */
+void quda_quantum_controlled_phase_gate(int control, int target, quantum_reg* qreg);
+
+/* Applies the Controlled-Rotate_k gate to the targit bit of a quantum register if the
+ * control bit is set. Is a key component of the quantum Fourier transform.
+ */
+void quda_quantum_controlled_rotate_k_gate(int control, int target, quantum_reg* qreg, int k);
 
 // Three-bit quantum gates
 

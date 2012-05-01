@@ -20,6 +20,7 @@ typedef struct quantum_state_t {
 typedef struct quantum_reg {
 	int qubits;
 	int size;
+	int scratch;
 	int num_states;
 	quantum_state_t* states;
 } quantum_reg;
@@ -49,22 +50,50 @@ void quda_quantum_bit_set(int target, quantum_reg* qreg);
  */
 void quda_quantum_bit_reset(int target, quantum_reg* qreg);
 
+/* Adds n scratch bits (always initialized to zero) to the quantum register.
+ * They may be used in gates like any other bit, however they are always indexed AFTER the
+ * register's actual bits. In a 16-qubit register, the first scratch bit (bit 0) will have
+ * index 16 (referenced from the LSB). Consider using quda_quantum_scratch_bit() to help.
+ */
+void quda_quantum_add_scratch(int n, quantum_reg* qreg);
+
+/* Clears all scratch bits from the quantum register and collapses/coalesces any states
+ * dependent on them.
+ */
+void quda_quantum_clear_scratch(quantum_reg* qreg);
+
+/* Collapses any superpositions of scratch bits into their most likely configuration. */
+void quda_quantum_collapse_scratch(quantum_reg* qreg);
+
+/* Returns the index of the desired scratch bit (for use in gates etc).
+ * Simple helper function only included to allow major changes to register design.
+ */
+int quda_quantum_scratch_bit(int index, quantum_reg* qreg);
+
 /* Performs a measurement on the quantum register and stores the state
  * in 'retval' if non-NULL.
- * Returns 0 on success, -1 on retval NULL, -2 on normalization error.
+ * Masks any scratch-space off from 'retval' UNLESS 'scratch' is set (non-zero).
+ * Returns 0 on success, -2 on retval NULL, -1 on normalization error.
  */
 // TODO: Attempt correction for minor normalization errors (ie floating point precision errors)
-int quda_quantum_reg_measure(quantum_reg* qreg, uint64_t* retval);
+int quda_quantum_reg_measure(quantum_reg* qreg, uint64_t* retval, int scratch);
 
 /* Performs a real-world quantum measurement and stores the state in 
  * 'retval' if non-NULL.
+ * If there is scratch space, calls quda_quantum_clear_scratch() so that 'retval' only returns
+ * the register's value (proper state).
  * On success, returns 0 and the register collapses to the physical state
  * measured with probability 1.
- * On failure, does not collapse. Returns -1 on retval NULL, -2 on
+ * On failure, does not collapse. Returns -2 on retval NULL, -1 on
  * normalization error.
  */
 // TODO: Attempt correction for minor normalization errors (ie floating point precision errors)
 int quda_quantum_reg_measure_and_collapse(quantum_reg* qreg, uint64_t* retval);
+
+/* Performs a real-world quantum measurement of a range [start,end) of bits and stores the state
+ * in 'retval' if non-NULL. Scratch space is treated as regular bits within the given range.
+ */
+int quda_quantum_range_measure_and_collapse(int start, int end, quantum_reg* reg,uint64_t* retval);
 
 /* Measure 1 bit of a quantum register */
 int quda_quantum_bit_measure(int target, quantum_reg* qreg);
@@ -98,6 +127,16 @@ void quda_quantum_reg_coalesce(quantum_reg* qreg);
  * Should be used sparingly to avoid higher computational and allocation overheads.
  */
 int quda_quantum_reg_trim(quantum_reg* qreg);
+
+/* Renormalizes state amplitudes such that all probabilities sum to 1.0.
+ */
+void quda_quantum_reg_renormalize(quantum_reg* qreg);
+
+/* Coaleses two amplitudes into the first, preserving the proper probability of both states.
+ * Writes QUDA_COMPLEX_ZERO into the 'toadd' amplitude and the resulting amplitude into 'dest'.
+ * Returns 1 if other amplitudes will need to be renormalized due to this operation, 0 otherwise.
+ */
+int quda_amplitude_coalesce(complex_t* dest, complex_t* toadd);
 
 /* Generates a float in the range [0,1) */
 // TODO: Look at performance implications of using 'double' here

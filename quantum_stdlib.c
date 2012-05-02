@@ -97,6 +97,7 @@ void quda_quantum_fourier_transform(quantum_reg* qreg) {
 				printf("violation following c-phase gate\n");
 				exit(2);
 			}
+			//quda_quantum_reg_dump(qreg,"R_k:");
 			// END DEBUG BLOCK
 		}
 		printf("Performing hadamard(bit %d)\n",i); // DEBUG

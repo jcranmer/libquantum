@@ -393,7 +393,7 @@ int quda_amplitude_coalesce(complex_t* dest, complex_t* toadd) {
 			if(dest->real > 0 && toadd->real < 0) {
 				float temp = dest->real*dest->real - toadd->real*toadd->real;
 				if(temp < 0) {
-					dest->real = -sqrt(temp);
+					dest->real = -sqrt(-temp);
 				} else {
 					dest->real = sqrt(temp);
 				}
@@ -401,7 +401,7 @@ int quda_amplitude_coalesce(complex_t* dest, complex_t* toadd) {
 			} else if(dest->real < 0 && toadd->real > 0) {
 				float temp = toadd->real*toadd->real - dest->real*dest->real;
 				if(temp < 0) {
-					dest->real = -sqrt(temp);
+					dest->real = -sqrt(-temp);
 				} else {
 					dest->real = sqrt(temp);
 				}
@@ -422,7 +422,7 @@ int quda_amplitude_coalesce(complex_t* dest, complex_t* toadd) {
 			if(dest->imag > 0 && toadd->imag < 0) {
 				float temp = dest->imag*dest->imag - toadd->imag*toadd->imag;
 				if(temp < 0) {
-					dest->imag = -sqrt(temp);
+					dest->imag = -sqrt(-temp);
 				} else {
 					dest->imag = sqrt(temp);
 				}
@@ -430,7 +430,7 @@ int quda_amplitude_coalesce(complex_t* dest, complex_t* toadd) {
 			} else if(dest->imag < 0 && toadd->imag > 0) {
 				float temp = toadd->imag*toadd->imag - dest->imag*dest->imag;
 				if(temp < 0) {
-					dest->imag = -sqrt(temp);
+					dest->imag = -sqrt(-temp);
 				} else {
 					dest->imag = sqrt(temp);
 				}

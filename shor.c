@@ -29,20 +29,22 @@ int main(int argc, char** argv) {
 	//srand(13); // TESTING - guarantees |4> as output reg state
 	srand(time(NULL));
 	int x;
+restart:
 	do {
 		x = rand() % N;
 	} while(quda_gcd_div(N,x) > 1 || x < 2);
 
 	//x = 8; // DEBUG
 	//x = 7; // TESTING
-	x = 13; // TESTING2
+	//x = 13; // TESTING2
 	printf("Random seed: %i\n", x);
 
 	int L = qubits_required(N);
 	//int width = qubits_required(N*N);
 	//int width = 2*L+2;
 	//int width = 11; // TESTING
-	int width = 4; // TESTING2
+	//int width = 4; // TESTING2
+	int width = L; // Minimum accuracy generic test
 
 	printf("N = %i, %i qubits required\n", N, width+L);
 
@@ -71,7 +73,7 @@ int main(int argc, char** argv) {
 	printf("After quda_quantum_hadamard_all()\n");
 	/* END DEBUG */
 
-	//quda_quantum_add_scratch(3*L+2,&qr1); // Full scratch may not be needed for classical exp_mod_n
+	//quda_quantum_add_scratch(3*L+2,&qr1); // Full scratch not needed for classical exp_mod_n
 	quda_quantum_add_scratch(L,&qr1); // effectively creates 'output' subregister for exp_mod_n() (+TESTING)
 	quda_classical_exp_mod_n(x,N,&qr1);
 
@@ -81,10 +83,10 @@ int main(int argc, char** argv) {
 	exit(0);
 	*/// END TESTING
 
-	/*// TESTING 2 - Verfies exactly for x = 13, width = 4
-	dump_mod_exp_results(&qr1,NULL); // TESTING 2 (x=13,width=4)
-	exit(0);
-	*/// END TESTING2
+	// TESTING 2 - Verfies exactly for x = 13, width = 4
+	//dump_mod_exp_results(&qr1,NULL); // TESTING 2 (x=13,width=4)
+	//exit(0);
+	// END TESTING2
 
 	/* DEBUG */
 	err = quda_check_normalization(&qr1);
@@ -116,7 +118,7 @@ int main(int argc, char** argv) {
 	printf("Going into quantum_fourier_transform()\n");
 	//qsort(qr1.states,qr1.num_states,sizeof(quantum_state_t),qstate_compare); // TESTING
 	// TESTING - dump verified as correct for (x,width) in {(7,11),(13,4)}
-	quda_quantum_reg_dump(&qr1,"BEFORE_FOURIER");
+	//quda_quantum_reg_dump(&qr1,"BEFORE_FOURIER");
 	/* END DEBUG */
 
 	quda_quantum_fourier_transform(&qr1);
@@ -129,7 +131,7 @@ int main(int argc, char** argv) {
 	}
 	printf("After quda_quantum_fourier_transform()\n");
 	printf("Going into reg_measure_and_collapse\n");
-	quda_quantum_reg_dump(&qr1,"AFTER_FOURIER");  // TESTING - results appear incorrect
+	//quda_quantum_reg_dump(&qr1,"AFTER_FOURIER");  // TESTING - results appear incorrect
 	/* END DEBUG */
 
 	uint64_t result;
@@ -141,6 +143,7 @@ int main(int argc, char** argv) {
 		// NOTE: This is actually a valid result for 15 with (x=7,width=11) ~.25 prob
 		// Creates fraction 0/1, expands to 0/2, 2 is a valid period
 		printf("Measured zero.\n");
+		goto restart; // CTS TESTING
 		return 0;
 	}
 
@@ -157,6 +160,7 @@ int main(int argc, char** argv) {
 
 	if(denom % 2 == 1) {
 		printf("Odd period, try again.\n");
+		goto restart; // CTS TESTING
 		return 0;
 	}
 
@@ -175,6 +179,7 @@ int main(int argc, char** argv) {
 		printf("%d = %d * %d\n",N,factor,N/factor);
 	} else {
 		printf("Could not determine factors.\n");
+		goto restart; // CTS TESTING
 	}
 
 	quda_quantum_reg_delete(&qr1);

@@ -1,12 +1,11 @@
 /* shor.c: implementation of Shor's quantum algorithm for factorization
  */
 
-#include "quantum_stdlib.h"
-#include "quantum_reg.h"
 #include <stdio.h>
 #include <stdlib.h>
 #include <time.h>
 #include <math.h>
+#include "quantum_stdlib.h"
 #include "shor.h"
 
 /* TODO: Change input parsing and/or accepted parameters
@@ -27,18 +26,23 @@ int main(int argc, char** argv) {
 	}
 
 	// Find a number x relatively prime to n
+	//srand(13); // TESTING - guarantees |4> as output reg state
 	srand(time(NULL));
 	int x;
 	do {
 		x = rand() % N;
 	} while(quda_gcd_div(N,x) > 1 || x < 2);
 
-	x = 8; // DEBUG
+	//x = 8; // DEBUG
+	//x = 7; // TESTING
+	x = 13; // TESTING2
 	printf("Random seed: %i\n", x);
 
 	int L = qubits_required(N);
-	int width = qubits_required(N*N);
+	//int width = qubits_required(N*N);
 	//int width = 2*L+2;
+	//int width = 11; // TESTING
+	int width = 4; // TESTING2
 
 	printf("N = %i, %i qubits required\n", N, width+L);
 
@@ -67,9 +71,20 @@ int main(int argc, char** argv) {
 	printf("After quda_quantum_hadamard_all()\n");
 	/* END DEBUG */
 
-	quda_quantum_add_scratch(3*L+2,&qr1); // Full scratch space not needed for classical algorithm
-	//quda_quantum_add_scratch(L,&qr1); // effectively creates 'output' subregister for exp_mod_n()
+	//quda_quantum_add_scratch(3*L+2,&qr1); // Full scratch may not be needed for classical exp_mod_n
+	quda_quantum_add_scratch(L,&qr1); // effectively creates 'output' subregister for exp_mod_n() (+TESTING)
 	quda_classical_exp_mod_n(x,N,&qr1);
+
+	/*// TESTING - Verifies exactly for x = 7 (width = 11)
+	int outputs = 7;
+	dump_mod_exp_results(&qr1,&outputs);
+	exit(0);
+	*/// END TESTING
+
+	/*// TESTING 2 - Verfies exactly for x = 13, width = 4
+	dump_mod_exp_results(&qr1,NULL); // TESTING 2 (x=13,width=4)
+	exit(0);
+	*/// END TESTING2
 
 	/* DEBUG */
 	err = quda_check_normalization(&qr1);
@@ -78,7 +93,7 @@ int main(int argc, char** argv) {
 		printf("ERROR: ");
 	}
 	printf("After quda_classical_exp_mod_n()\n");
-	printf("Ok going into quantum_collapse_scratch()\n");
+	printf("Going into quantum_collapse_scratch()\n");
 	/* END DEBUG */
 
 	/* libquantum measures all of its scratch bits here for some reason.
@@ -88,8 +103,8 @@ int main(int argc, char** argv) {
 	 * significant register bits to store scratch (with no differentiation from regular bits).
 	 * Comment the next line for the opposite effect (no coalescing).
 	 */
-	//quda_quantum_collapse_scratch(&qr1);
-	quda_quantum_clear_scratch(&qr1);
+	// TESTING - this function is now correct
+	quda_quantum_collapse_scratch(&qr1); // Explain implicit measurement; stupid not to call this
 
 	/* DEBUG */
 	err = quda_check_normalization(&qr1);
@@ -99,7 +114,9 @@ int main(int argc, char** argv) {
 	}
 	printf("After quantum_collapse_scratch()\n");
 	printf("Going into quantum_fourier_transform()\n");
-	//quda_quantum_reg_dump(&qr1,"BEFORE_FOURIER");
+	//qsort(qr1.states,qr1.num_states,sizeof(quantum_state_t),qstate_compare); // TESTING
+	// TESTING - dump verified as correct for (x,width) in {(7,11),(13,4)}
+	quda_quantum_reg_dump(&qr1,"BEFORE_FOURIER");
 	/* END DEBUG */
 
 	quda_quantum_fourier_transform(&qr1);
@@ -112,7 +129,7 @@ int main(int argc, char** argv) {
 	}
 	printf("After quda_quantum_fourier_transform()\n");
 	printf("Going into reg_measure_and_collapse\n");
-	//quda_quantum_reg_dump(&qr1,"AFTER_FOURIER");
+	quda_quantum_reg_dump(&qr1,"AFTER_FOURIER");  // TESTING - results appear incorrect
 	/* END DEBUG */
 
 	uint64_t result;
@@ -121,10 +138,13 @@ int main(int argc, char** argv) {
 		printf("Invalid result (normalization error).\n");
 		return -1;
 	} else if(result == 0) {
+		// NOTE: This is actually a valid result for 15 with (x=7,width=11) ~.25 prob
+		// Creates fraction 0/1, expands to 0/2, 2 is a valid period
 		printf("Measured zero.\n");
 		return 0;
 	}
 
+	// FIXME - Fractional expansion may be incorrect for our implementation
 	uint64_t denom = 1 << width;
 	quda_classical_continued_fraction_expansion(&result,&denom);
 
@@ -162,13 +182,34 @@ int main(int argc, char** argv) {
 	return 0;
 }
 
+// Testing functions
+void dump_mod_exp_results(quantum_reg* qreg, int* num_outputs) {
+	int outputs;
+	if(num_outputs) {
+		outputs = *num_outputs;
+	} else {
+		outputs = qreg->num_states;
+	}
+
+	uint64_t mask = (1 << qreg->qubits)-1;
+	uint64_t smask = ((1 << qreg->scratch)-1) << qreg->qubits;
+
+	uint64_t val,sval;
+	int i;
+	for(i=0;i<outputs;i++) {
+		val = qreg->states[i].state & mask;
+		sval = (qreg->states[i].state & smask) >> qreg->qubits;
+		printf("state[%d]: r_input = %lu, r_output =  %lu\n",i,val,sval);
+	}
+}
+
 // Classical functions
 
 int qubits_required(int num) {
-	int j = 1;
 	int i;
-	for(i=1;j < num;i++) {
-		j <<= 1;
+	num >>= 1;
+	for(i=1;num > 0;i++) {
+		num >>= 1;
 	}
 	return i;
 }

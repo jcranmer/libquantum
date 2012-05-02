@@ -130,16 +130,19 @@ int quda_quantum_reg_measure_and_collapse(quantum_reg* qreg, uint64_t* retval) {
 	return -1;
 }
 
+// TODO: Write optimized version that avoids unnecessary duplicate operations
 int quda_quantum_range_measure_and_collapse(int start, int end, quantum_reg* qreg, uint64_t* retval) {
 	int i;
 	uint64_t res = 0;
-	for(i=0;i<end;i++) {
+	for(i=start;i<end;i++) {
 		res |= quda_quantum_bit_measure_and_collapse(i,qreg) << i;
 	}
 
 	if(retval) {
 		*retval = res;
 	}
+
+	// Renormalize already handled within each bit collapse
 
 	return 0;
 }
@@ -387,9 +390,73 @@ int quda_amplitude_coalesce(complex_t* dest, complex_t* toadd) {
 		if(dest->real == 0.0f) {
 			dest->real = toadd->real;
 		} else {
+			if(dest->real > 0 && toadd->real < 0) {
+				float temp = dest->real*dest->real - toadd->real*toadd->real;
+				if(temp < 0) {
+					dest->real = -sqrt(temp);
+				} else {
+					dest->real = sqrt(temp);
+				}
+				renorm = 1;
+			} else if(dest->real < 0 && toadd->real > 0) {
+				float temp = toadd->real*toadd->real - dest->real*dest->real;
+				if(temp < 0) {
+					dest->real = -sqrt(temp);
+				} else {
+					dest->real = sqrt(temp);
+				}
+				renorm = 1;
+			} else if(dest->real > 0 && toadd->real > 0) {
+				dest->real = sqrt(dest->real * dest->real + toadd->real * toadd->real);
+			} else {
+				dest->real = -sqrt(dest->real * dest->real + toadd->real * toadd->real);
+			}
+		}
+		toadd->real = 0.0f;
+	}
+
+	if(toadd->imag != 0.0f) {
+		if(dest->imag == 0.0f) {
+			dest->imag = toadd->imag;
+		} else {
+			if(dest->imag > 0 && toadd->imag < 0) {
+				float temp = dest->imag*dest->imag - toadd->imag*toadd->imag;
+				if(temp < 0) {
+					dest->imag = -sqrt(temp);
+				} else {
+					dest->imag = sqrt(temp);
+				}
+				renorm = 1;
+			} else if(dest->imag < 0 && toadd->imag > 0) {
+				float temp = toadd->imag*toadd->imag - dest->imag*dest->imag;
+				if(temp < 0) {
+					dest->imag = -sqrt(temp);
+				} else {
+					dest->imag = sqrt(temp);
+				}
+				renorm = 1;
+			} else if(dest->imag > 0 && toadd->imag > 0) {
+				dest->imag = sqrt(dest->imag * dest->imag + toadd->imag * toadd->imag);
+			} else {
+				dest->imag = -sqrt(dest->imag * dest->imag + toadd->imag * toadd->imag);
+			}
+		}
+		toadd->imag = 0.0f;
+	}
+
+	return renorm;
+}
+
+/* Old (wrong) implementation - did not account for cancellation
+int quda_amplitude_coalesce(complex_t* dest, complex_t* toadd) {
+	int renorm = 0;
+	if(toadd->real != 0.0f) {
+		if(dest->real == 0.0f) {
+			dest->real = toadd->real;
+		} else {
 			if((dest->real > 0 && toadd->real < 0) || (dest->real < 0 && toadd->real > 0)) {
 				renorm = 1;
-			}
+			} // FIXME: negatives DO NOT CANCEL
 			dest->real = sqrt(dest->real * dest->real + toadd->real * toadd->real);
 		}
 		toadd->real = 0.0f;
@@ -409,6 +476,7 @@ int quda_amplitude_coalesce(complex_t* dest, complex_t* toadd) {
 
 	return renorm;
 }
+*/
 
 float quda_rand_float() {
 	return rand()/(float)RAND_MAX;

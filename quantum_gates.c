@@ -25,16 +25,15 @@ int quda_quantum_hadamard_gate(int target, quantum_reg* qreg) {
 		// Copy amplitude to created state
 		qreg->states[qreg->num_states+i].amplitude = qreg->states[i].amplitude;
 
-		// TODO: Look at overhead of conditional rmul vs negation
 		if(qreg->states[i].state & mask) {
 			qreg->states[i].amplitude = quda_complex_neg(qreg->states[i].amplitude);
 		}
-		/*// DEBUG BLOCK
+		// DEBUG BLOCK
 		if(quda_complex_abs_square(qreg->states[i].amplitude) > 1.0f) {
 			printf("PROBLEM (hadamard): state[%d].amplitude = (%f,%f)\n",i,
 					qreg->states[i].amplitude.real,qreg->states[i].amplitude.imag);
 		}
-		*/// END DEBUG BLOCK
+		// END DEBUG BLOCK
 	}
 
 	printf("HADAMARD: increasing # states from %d ",qreg->num_states); // DEBUG
@@ -226,6 +225,7 @@ void quda_quantum_controlled_phase_gate(int control, int target, quantum_reg* qr
 }
 
 void quda_quantum_controlled_rotate_k_gate(int control, int target, quantum_reg* qreg, int k) {
+	if(control-target != k-1) printf("C-r-k Violation!\n"); // DEBUG
 	float temp = QUDA_PI / (1 << (k-1));
 	complex_t c = { .real = cos(temp), .imag = sin(temp) };
 	uint64_t mask = 1 << control;

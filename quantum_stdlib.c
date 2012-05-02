@@ -49,10 +49,13 @@ int quda_weak_check_amplitudes(quantum_reg* qreg) {
 
 void quda_quantum_reg_dump(quantum_reg* qreg, char* tag) {
 	int i;
+	uint64_t mask = (1 << qreg->qubits)-1;
+	uint64_t smask = ((1 << qreg->scratch)-1) << qreg->qubits;
 	printf("QREG_DUMP: %d states\n",qreg->num_states);
 	for(i=0;i<qreg->num_states;i++) {
 		if(tag) printf("%s: ",tag);
-		printf("qreg->states[%d].state = %lu\n",i,qreg->states[i].state);
+		printf("qreg->states[%d].state = %lu (bits,scratch)=(%lu,%lu)\n",i,qreg->states[i].state,
+				qreg->states[i].state & mask,(qreg->states[i].state & smask) >> qreg->qubits);
 		if(tag) printf("%s: ",tag);
 		printf("qreg->states[%d].amplitude = (%f,%f)\n",i,qreg->states[i].amplitude.real,
 				qreg->states[i].amplitude.imag);
@@ -79,14 +82,51 @@ int quda_quantum_hadamard_all(quantum_reg* qreg) {
 	return quda_quantum_hadamard_range(0,qreg->qubits,qreg);
 }
 
+// Original implementation
 void quda_quantum_fourier_transform(quantum_reg* qreg) {
 	int q = qreg->qubits-1;
 	int i,j;
 	for(i=q;i>=0;i--) {
 		for(j=q;j>i;j--) {
-			printf("Performing c-R_k(%d,%d)\n",j,i); // DEBUG
+			printf("Performing c-R_%d (PI/%lu) on (%d,%d)\n",j-i+1,(uint64_t)1 << (j-i),j,i); // DEBUG
 			//quda_quantum_controlled_phase_gate(j,i,qreg);
 			quda_quantum_controlled_rotate_k_gate(j,i,qreg,j-i+1);
+			// DEBUG BLOCK
+			int err2 = quda_weak_check_amplitudes(qreg);
+			if(err2) {
+				printf("violation following c-phase gate\n");
+				exit(2);
+			}
+			// END DEBUG BLOCK
+		}
+		printf("Performing hadamard(bit %d)\n",i); // DEBUG
+		quda_quantum_hadamard_gate(i,qreg);
+		// DEBUG BLOCK
+		int err = quda_weak_check_amplitudes(qreg);
+		if(err) {
+			printf("violation following hadamard gate\n");
+			exit(1);
+		}
+		//quda_quantum_reg_dump(qreg,"H:");
+		// END DEBUG BLOCK
+	}
+
+	// TODO: Consider using SWAP gate here instead
+	for(i=0;i<qreg->qubits/2;i++) {
+		quda_quantum_controlled_not_gate(i,q-i,qreg);
+		quda_quantum_controlled_not_gate(q-i,i,qreg);
+		quda_quantum_controlled_not_gate(i,q-i,qreg);
+	}
+}
+
+/*// TESTING (endianness)
+void quda_quantum_fourier_transform(quantum_reg* qreg) {
+	int q = qreg->qubits-1;
+	int i,j;
+	for(i=0;i<=q;i++) {
+		for(j=0;j<i;j++) {
+			printf("Performing c-R_%d (PI/%lu) on (%d,%d)\n",i-j+1,(uint64_t)1 << (i-j),j,i); // DEBUG
+			quda_quantum_controlled_rotate_k_gate(j,i,qreg,i-j+1);
 			// DEBUG BLOCK
 			int err2 = quda_weak_check_amplitudes(qreg);
 			if(err2) {
@@ -113,6 +153,7 @@ void quda_quantum_fourier_transform(quantum_reg* qreg) {
 		quda_quantum_controlled_not_gate(i,q-i,qreg);
 	}
 }
+*/
 
 // Classical functions
 

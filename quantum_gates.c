@@ -4,7 +4,7 @@
 #include <math.h>
 #include "quantum_gates.h"
 #include "complex.h"
-#include <stdio.h> // DEBUG
+//#include <stdio.h> // DEBUG
 
 // One-bit quantum gates
 int quda_quantum_hadamard_gate(int target, quantum_reg* qreg) {
@@ -28,56 +28,12 @@ int quda_quantum_hadamard_gate(int target, quantum_reg* qreg) {
 		if(qreg->states[i].state & mask) {
 			qreg->states[i].amplitude = quda_complex_neg(qreg->states[i].amplitude);
 		}
-		// DEBUG BLOCK
-		if(quda_complex_abs_square(qreg->states[i].amplitude) > 1.0f) {
-			printf("PROBLEM (hadamard): state[%d].amplitude = (%f,%f)\n",i,
-					qreg->states[i].amplitude.real,qreg->states[i].amplitude.imag);
-		}
-		// END DEBUG BLOCK
 	}
 
-	printf("HADAMARD: increasing # states from %d ",qreg->num_states); // DEBUG
 	qreg->num_states = 2*qreg->num_states;
-	printf("to %d\n",qreg->num_states); // DEBUG
-
-	/*// DEBUG BLOCK
-	printf("BEFORE reg_coalesce()\n");
-	printf("new num_states: %d\n",qreg->num_states);
-	printf("state[0].amp: %f,%f\n",qreg->states[0].amplitude.real,qreg->states[0].amplitude.imag);
-	int err = 0;
-	float p = 0.0f;
-	for(i=0;i<qreg->num_states;i++) {
-		float temp = quda_complex_abs_square(qreg->states[i].amplitude);
-		p += temp;
-		if(temp > 1.0) {
-			printf("Amplitude error. state[%d]: %lu --> (%f,%f)\n",i,qreg->states[i].state,
-					qreg->states[i].amplitude.real, qreg->states[i].amplitude.imag);
-			err = 1;
-		}
-	}
-	printf("sum of all probabilties: %f\n",p);
-	*/// END DEBUG BLOCK
 
 	// TODO: Ideally, make this call optional or conditional
 	quda_quantum_reg_coalesce(qreg);
-
-	/*// DEBUG BLOCK
-	printf("AFTER reg_coalesce()\n");
-	printf("num_states reduced to: %d\n",qreg->num_states);
-	err = 0;
-	p = 0.0f;
-	for(i=0;i<qreg->num_states;i++) {
-		float temp = quda_complex_abs_square(qreg->states[i].amplitude);
-		p += temp;
-		if(temp > 1.0) {
-			printf("Amplitude error. state[%d]: %lu --> (%f,%f)\n",i,qreg->states[i].state,
-					qreg->states[i].amplitude.real, qreg->states[i].amplitude.imag);
-			err = 1;
-		}
-	}
-	printf("sum of all probabilties: %f\n",p);
-	if(err == 0) printf("No problem within Hadamard gate.\n");
-	*/// END DEBUG BLOCK
 
 	return 0;
 }
@@ -166,12 +122,6 @@ void quda_quantum_controlled_not_gate(int control, int target, quantum_reg* qreg
 	for(i=0;i<qreg->num_states;i++) {
 		if(qreg->states[i].state & cmask) {
 			qreg->states[i].state = qreg->states[i].state ^ tmask;
-			/*// DEBUG BLOCK
-			if(quda_complex_abs_square(qreg->states[i].amplitude) > 1.0f) {
-				printf("PROBLEM (c-not): state[%d].amplitude = (%f,%f)\n",i,
-						qreg->states[i].amplitude.real,qreg->states[i].amplitude.imag);
-			}
-			*/// END DEBUG BLOCK
 		}
 	}
 }
@@ -211,21 +161,12 @@ void quda_quantum_controlled_phase_gate(int control, int target, quantum_reg* qr
 	int i;
 	for(i=0;i<qreg->num_states;i++) {
 		if((qreg->states[i].state & mask) == mask) {
-			//complex_t oldval = qreg->states[i].amplitude; // DEBUG
 			qreg->states[i].amplitude = quda_complex_mul_i(qreg->states[i].amplitude);
-			/*// DEBUG BLOCK
-			if(quda_complex_abs_square(qreg->states[i].amplitude) > 1.0f) {
-				printf("PROBLEM (c-phase): state[%d].amplitude = (%f,%f)\n",i,
-						qreg->states[i].amplitude.real,qreg->states[i].amplitude.imag);
-				printf("Old Value: (%f,%f)\n",oldval.real,oldval.imag);
-			}
-			*/// END DEBUG BLOCK
 		}
 	}
 }
 
 void quda_quantum_controlled_rotate_k_gate(int control, int target, quantum_reg* qreg, int k) {
-	if(control-target != k-1) printf("C-r-k Violation!\n"); // DEBUG
 	float temp = QUDA_PI / (1 << (k-1));
 	complex_t c = { .real = cos(temp), .imag = sin(temp) };
 	uint64_t mask = 1 << control;

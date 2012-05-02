@@ -4,7 +4,7 @@
 #include "quantum_reg.h"
 #include <stdlib.h>
 #include <math.h>
-#include <stdio.h> // DEBUG
+//#include <stdio.h> // DEBUG
 
 int quda_quantum_reg_init(quantum_reg* qreg, int qubits) {
 	qreg->qubits = qubits;
@@ -81,9 +81,6 @@ int quda_quantum_reg_measure(quantum_reg* qreg, uint64_t* retval,int scratch) {
 		if(!quda_complex_eq(qreg->states[i].amplitude,QUDA_COMPLEX_ZERO)) {
 			f -= quda_complex_abs_square(qreg->states[i].amplitude);
 			if(f < 0) {
-				//printf("Chose state %d: state == %lu, amp == (%f,%f)\n",i,
-				//		qreg->states[i].state & ((1 << qreg->qubits)-1),
-				//		qreg->states[i].amplitude.real,qreg->states[i].amplitude.imag); // DEBUG
 				if(!scratch && qreg->scratch > 0) {
 					uint64_t mask = (1 << qreg->qubits)-1;
 					*retval = qreg->states[i].state & mask;
@@ -109,16 +106,12 @@ int quda_quantum_reg_measure_and_collapse(quantum_reg* qreg, uint64_t* retval) {
 	}
 	float f = quda_rand_float();
 	int i;
-	//printf("%d states\n",qreg->num_states); // DEBUG
 	for(i=0;i<qreg->num_states;i++) {
-		//printf("qreg->state[%d].state = %lu\n",i,qreg->states[i].state); // DEBUG
-		//printf("qreg->state[%d].amplitude = (%f,%f)\n",i,qreg->states[i].amplitude.real,qreg->states[i].amplitude.imag); // DEBUG
 		if(!quda_complex_eq(qreg->states[i].amplitude,QUDA_COMPLEX_ZERO)) {
 			f -= quda_complex_abs_square(qreg->states[i].amplitude);
 			if(f < 0) {
 				uint64_t mask = (1 << qreg->qubits)-1;
 				*retval = qreg->states[i].state & mask;
-				//*retval = qreg->states[i].state;
 				qreg->states[0].state = qreg->states[i].state;
 				qreg->states[0].amplitude = QUDA_COMPLEX_ONE;
 				qreg->num_states = 1;
@@ -146,7 +139,8 @@ int quda_quantum_range_measure_and_collapse(int start, int end, quantum_reg* qre
 
 	return 0;
 }
-/*	// old range_measure_and_collapse - appears to be invalid
+
+/*	// old range_measure_and_collapse - is invalid, but concepts may be helpful
 	uint64_t res;
 	// Measure entire register (classical operation)
 	int err = quda_quantum_reg_measure(qreg,&res,1);
@@ -256,9 +250,7 @@ int quda_quantum_bit_measure_and_collapse(int target, quantum_reg* qreg) {
 void quda_quantum_reg_prune(quantum_reg* qreg) {
 	int i,end;
 	for(i=0,end=qreg->num_states-1;i < end;i++) {
-		//printf("PRUNE: state[%d].amp = (%f,%f)\n",i,qreg->states[i].amplitude.real,qreg->states[i].amplitude.imag); // DEBUG
 		if(quda_complex_eq(qreg->states[i].amplitude,QUDA_COMPLEX_ZERO)) {
-			//printf("EQZ: state[%d].amp = (%f,%f)\n",i,qreg->states[i].amplitude.real,qreg->states[i].amplitude.imag); // DEBUG
 			while(quda_complex_eq(qreg->states[end].amplitude,QUDA_COMPLEX_ZERO)) {
 				end--;
 				if(i == end) { // if no non-zero elements to copy
@@ -278,15 +270,10 @@ void quda_quantum_reg_prune(quantum_reg* qreg) {
 		}
 	}
 
-	printf("PRUNE: Reduced states from %d ",qreg->num_states); // DEBUG
 	if(quda_complex_eq(qreg->states[i].amplitude,QUDA_COMPLEX_ZERO)) {
 		qreg->num_states = end;
 	} else {
 		qreg->num_states = end+1;
-	}
-	printf("to %d\n",qreg->num_states); // DEBUG
-	if(quda_complex_eq(qreg->states[qreg->num_states-1].amplitude,QUDA_COMPLEX_ZERO)) {
-		printf("PRUNE: Violation. Zero last element.\n"); // TESTING
 	}
 }
 
@@ -321,19 +308,13 @@ int quda_quantum_reg_enlarge(quantum_reg* qreg,int* amount) {
 void quda_quantum_reg_coalesce(quantum_reg* qreg) {
 	if(qreg->num_states < 2) return;
 	qsort(qreg->states,qreg->num_states,sizeof(quantum_state_t),qstate_compare);
-	//printf("COALESCE: old states: %d\n",qreg->num_states); // DEBUG
+
 	int i,j;
 	int renorm = 0;
 	for(i=1,j=0;i<qreg->num_states;i++) {
 		if(qreg->states[j].state == qreg->states[i].state) {
-			/*// DEBUG BLOCK
-			printf("coalescing states %d and %d.\n",j,i);
-			printf("amplitude grows from (%f,%f) to ",qreg->states[j].amplitude.real,
-					qreg->states[j].amplitude.imag);
-			*/// END DEBUG BLOCK
 			renorm |= quda_amplitude_coalesce(&qreg->states[j].amplitude,
 					&qreg->states[i].amplitude);
-			//printf("(%f,%f) (state[%d])\n",qreg->states[j].amplitude.real,qreg->states[j].amplitude.imag,j); // DEBUG
 		} else {
 			j = i;
 		}
@@ -345,7 +326,6 @@ void quda_quantum_reg_coalesce(quantum_reg* qreg) {
 
 	// TODO: Optimize pruning into the above pass or make it optional/conditional
 	quda_quantum_reg_prune(qreg);
-	//printf("COALESCE: new states: %d\n",qreg->num_states); // DEBUG
 }
 
 int quda_quantum_reg_trim(quantum_reg* qreg) {
@@ -393,7 +373,7 @@ int quda_amplitude_coalesce(complex_t* dest, complex_t* toadd) {
 			if(dest->real > 0 && toadd->real < 0) {
 				float temp = dest->real*dest->real - toadd->real*toadd->real;
 				if(temp < 0) {
-					dest->real = -sqrt(temp);
+					dest->real = -sqrt(-temp);
 				} else {
 					dest->real = sqrt(temp);
 				}
@@ -401,7 +381,7 @@ int quda_amplitude_coalesce(complex_t* dest, complex_t* toadd) {
 			} else if(dest->real < 0 && toadd->real > 0) {
 				float temp = toadd->real*toadd->real - dest->real*dest->real;
 				if(temp < 0) {
-					dest->real = -sqrt(temp);
+					dest->real = -sqrt(-temp);
 				} else {
 					dest->real = sqrt(temp);
 				}
@@ -422,7 +402,7 @@ int quda_amplitude_coalesce(complex_t* dest, complex_t* toadd) {
 			if(dest->imag > 0 && toadd->imag < 0) {
 				float temp = dest->imag*dest->imag - toadd->imag*toadd->imag;
 				if(temp < 0) {
-					dest->imag = -sqrt(temp);
+					dest->imag = -sqrt(-temp);
 				} else {
 					dest->imag = sqrt(temp);
 				}
@@ -430,7 +410,7 @@ int quda_amplitude_coalesce(complex_t* dest, complex_t* toadd) {
 			} else if(dest->imag < 0 && toadd->imag > 0) {
 				float temp = toadd->imag*toadd->imag - dest->imag*dest->imag;
 				if(temp < 0) {
-					dest->imag = -sqrt(temp);
+					dest->imag = -sqrt(-temp);
 				} else {
 					dest->imag = sqrt(temp);
 				}
@@ -447,7 +427,7 @@ int quda_amplitude_coalesce(complex_t* dest, complex_t* toadd) {
 	return renorm;
 }
 
-/* Old (wrong) implementation - did not account for cancellation
+/* Old (wrong) implementation - did not account for cancellation (but MUCH smaller)
 int quda_amplitude_coalesce(complex_t* dest, complex_t* toadd) {
 	int renorm = 0;
 	if(toadd->real != 0.0f) {

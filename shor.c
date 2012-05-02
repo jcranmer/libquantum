@@ -26,23 +26,18 @@ int main(int argc, char** argv) {
 	}
 
 	// Find a number x relatively prime to n
-	//srand(13); // TESTING - guarantees |4> as output reg state
 	srand(time(NULL));
 	int x;
 	do {
 		x = rand() % N;
 	} while(quda_gcd_div(N,x) > 1 || x < 2);
 
-	//x = 8; // DEBUG
-	//x = 7; // TESTING
-	x = 13; // TESTING2
 	printf("Random seed: %i\n", x);
 
 	int L = qubits_required(N);
-	//int width = qubits_required(N*N);
-	//int width = 2*L+2;
-	//int width = 11; // TESTING
-	int width = 4; // TESTING2
+	//int width = qubits_required(N*N); // commonly seen case
+	//int width = 2*L+2; // commonly seen case
+	int width = L; // basic case, but ~25% chance of measuring 0 for 15
 
 	printf("N = %i, %i qubits required\n", N, width+L);
 
@@ -50,87 +45,20 @@ int main(int argc, char** argv) {
 	quda_quantum_reg_init(&qr1,width);
 	quda_quantum_reg_set(&qr1,0);
 
-	int err;
-	/* DEBUG */
-	err = quda_check_normalization(&qr1);
-	err |= quda_weak_check_amplitudes(&qr1);
-	if(err != 0) {
-		printf("ERROR: ");
-	}
-	printf("After quda_quantum_reg_set()\n");
-	/* END DEBUG */
-
 	quda_quantum_hadamard_all(&qr1);
 
-	/* DEBUG */
-	err = quda_check_normalization(&qr1);
-	err |= quda_weak_check_amplitudes(&qr1);
-	if(err != 0) {
-		printf("ERROR: ");
-	}
-	printf("After quda_quantum_hadamard_all()\n");
-	/* END DEBUG */
-
-	//quda_quantum_add_scratch(3*L+2,&qr1); // Full scratch may not be needed for classical exp_mod_n
-	quda_quantum_add_scratch(L,&qr1); // effectively creates 'output' subregister for exp_mod_n() (+TESTING)
+	//quda_quantum_add_scratch(3*L+2,&qr1); // Extra scratch probably unnecessary
+	quda_quantum_add_scratch(L,&qr1); // effectively creates 'output' subregister for exp_mod_n()
 	quda_classical_exp_mod_n(x,N,&qr1);
 
-	/*// TESTING - Verifies exactly for x = 7 (width = 11)
-	int outputs = 7;
-	dump_mod_exp_results(&qr1,&outputs);
-	exit(0);
-	*/// END TESTING
-
-	/*// TESTING 2 - Verfies exactly for x = 13, width = 4
-	dump_mod_exp_results(&qr1,NULL); // TESTING 2 (x=13,width=4)
-	exit(0);
-	*/// END TESTING2
-
-	/* DEBUG */
-	err = quda_check_normalization(&qr1);
-	err |= quda_weak_check_amplitudes(&qr1);
-	if(err != 0) {
-		printf("ERROR: ");
-	}
-	printf("After quda_classical_exp_mod_n()\n");
-	printf("Going into quantum_collapse_scratch()\n");
-	/* END DEBUG */
-
-	/* libquantum measures all of its scratch bits here for some reason.
-	 * Presumedly, this reduces memory overhead by finding the single most likely value of
-	 * x^(hadamarded-input) % n. Thus their qreg would be left with only inputs that correspond
-	 * to the most likely output. It may also be a correctness issue since they use the least
-	 * significant register bits to store scratch (with no differentiation from regular bits).
-	 * Comment the next line for the opposite effect (no coalescing).
+	/* By the principle of implicit measurement, since we are effectively done with the 'output'
+	 * subregister, it may be measured at any time. This measurement will collapse the register's
+	 * scratch bits into a single possible state (and any generators that created it). We should
+	 * ALWAYS do this in our simulator, since it reduces mem usage by at least half (if not more).
 	 */
-	// TESTING - this function is now correct
-	quda_quantum_collapse_scratch(&qr1); // Explain implicit measurement; stupid not to call this
-
-	/* DEBUG */
-	err = quda_check_normalization(&qr1);
-	err |= quda_weak_check_amplitudes(&qr1);
-	if(err != 0) {
-		printf("ERROR: ");
-	}
-	printf("After quantum_collapse_scratch()\n");
-	printf("Going into quantum_fourier_transform()\n");
-	//qsort(qr1.states,qr1.num_states,sizeof(quantum_state_t),qstate_compare); // TESTING
-	// TESTING - dump verified as correct for (x,width) in {(7,11),(13,4)}
-	quda_quantum_reg_dump(&qr1,"BEFORE_FOURIER");
-	/* END DEBUG */
+	quda_quantum_collapse_scratch(&qr1);
 
 	quda_quantum_fourier_transform(&qr1);
-
-	/* DEBUG */
-	err = quda_check_normalization(&qr1);
-	err |= quda_weak_check_amplitudes(&qr1);
-	if(err != 0) {
-		printf("ERROR: ");
-	}
-	printf("After quda_quantum_fourier_transform()\n");
-	printf("Going into reg_measure_and_collapse\n");
-	quda_quantum_reg_dump(&qr1,"AFTER_FOURIER");  // TESTING - results appear incorrect
-	/* END DEBUG */
 
 	uint64_t result;
 	int res = quda_quantum_reg_measure_and_collapse(&qr1,&result);
@@ -138,13 +66,13 @@ int main(int argc, char** argv) {
 		printf("Invalid result (normalization error).\n");
 		return -1;
 	} else if(result == 0) {
-		// NOTE: This is actually a valid result for 15 with (x=7,width=11) ~.25 prob
+		// NOTE: This can (kind of) be a valid result for 15 with (x=7,width=11) ~.25 prob
 		// Creates fraction 0/1, expands to 0/2, 2 is a valid period
+		// Obviously doesn't hold for other numbers and thus may create erroneous results.
 		printf("Measured zero.\n");
 		return 0;
 	}
 
-	// FIXME - Fractional expansion may be incorrect for our implementation
 	uint64_t denom = 1 << width;
 	quda_classical_continued_fraction_expansion(&result,&denom);
 

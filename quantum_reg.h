@@ -7,6 +7,7 @@
 #include <stdlib.h>
 #include <stdint.h>
 #include "complex.h"
+#include "uthash.h"
 
 #define DEFAULT_QTS_RATIO 1.0 // default qubits-to-states ratio
 
@@ -24,6 +25,12 @@ typedef struct quantum_reg {
 	int num_states;
 	quantum_state_t* states;
 } quantum_reg;
+
+typedef struct hash_entry {
+	uint64_t state;
+	int index;
+	UT_hash_handle hh; // makes this struct hashable
+} hash_entry;
 
 /* Initializes a quantum register with the specified number of qubits.
  * Returns 0 on success or -1 if allocation fails.

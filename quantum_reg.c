@@ -307,24 +307,44 @@ int quda_quantum_reg_enlarge(quantum_reg* qreg,int* amount) {
 
 void quda_quantum_reg_coalesce(quantum_reg* qreg) {
 	if(qreg->num_states < 2) return;
-	qsort(qreg->states,qreg->num_states,sizeof(quantum_state_t),qstate_compare);
+	hash_entry* htable = NULL;
 
-	int i,j;
+	int i;
 	int renorm = 0;
-	for(i=1,j=0;i<qreg->num_states;i++) {
-		if(qreg->states[j].state == qreg->states[i].state) {
-			renorm |= quda_amplitude_coalesce(&qreg->states[j].amplitude,
+	hash_entry* curEntry;
+	hash_entry* dupEntry;
+	for(i=0;i<qreg->num_states;i++) {
+		HASH_FIND(hh,htable,&qreg->states[i].state,sizeof(uint64_t),dupEntry);
+		if(dupEntry != NULL) {
+			/*// DEBUG
+			printf("Duplicate state found:\n");
+			printf("coalescing state[%d]: %lu --> (%f,%f)\n",dupEntry->index,
+					qreg->states[dupEntry->index].state,
+					qreg->states[dupEntry->index].amplitude.real,
+					qreg->states[dupEntry->index].amplitude.imag);
+			printf("with state[%d]: %lu --> (%f,%f)\n",i,qreg->states[i].state,
+					qreg->states[i].amplitude.real,qreg->states[i].amplitude.imag);
+			*/// END DEBUG
+			renorm |= quda_amplitude_coalesce(&qreg->states[dupEntry->index].amplitude,
 					&qreg->states[i].amplitude);
 		} else {
-			j = i;
+			curEntry = (hash_entry*)malloc(sizeof(hash_entry));
+			curEntry->state = qreg->states[i].state;
+			curEntry->index = i;
+			HASH_ADD(hh,htable,state,sizeof(uint64_t),curEntry);
 		}
+	}
+
+	// Mem cleanup
+	HASH_ITER(hh, htable, curEntry, dupEntry) {
+		HASH_DEL(htable,curEntry);
+		free(curEntry);
 	}
 
 	if(renorm) {
 		quda_quantum_reg_renormalize(qreg);
 	}
 
-	// TODO: Optimize pruning into the above pass or make it optional/conditional
 	quda_quantum_reg_prune(qreg);
 }
 
@@ -460,13 +480,4 @@ int quda_amplitude_coalesce(complex_t* dest, complex_t* toadd) {
 
 float quda_rand_float() {
 	return rand()/(float)RAND_MAX;
-}
-
-int qstate_compare(const void* qstate1, const void* qstate2) {
-	uint64_t s1 = ((quantum_state_t*)qstate1)->state;
-	uint64_t s2 = ((quantum_state_t*)qstate2)->state;
-	if(s1 == s2) {
-		return 0;
-	}
-	return (s1 < s2) ? -1 : 1;
 }

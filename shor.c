@@ -32,11 +32,12 @@ int main(int argc, char** argv) {
 		x = rand() % N;
 	} while(quda_gcd_div(N,x) > 1 || x < 2);
 
-  if (argc > 2) {
-    x = atoi(argv[2]);
-  }
+	if (argc > 2) {
+		x = atoi(argv[2]);
+		srand(x);
+	}
+
 	printf("Random seed: %i\n", x);
-  srand(x);
 
 	int L = qubits_required(N);
 	//int width = qubits_required(N*N); // commonly seen case

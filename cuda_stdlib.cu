@@ -104,43 +104,64 @@ extern "C" void quda_cu_quantum_fourier_transform(quantum_reg* qreg) {
   SANITY_CHECK(err);
   err = cudaMalloc(&qreg_device, sizeof(cuda_quantum_reg));
   SANITY_CHECK(err);
-  err = cudaMemcpy2D(states_device, sizeof(uint64_t),
-    &qreg->states[0].state, sizeof(uint64_t) + sizeof(complex_t),
-    sizeof(uint64_t), qreg->num_states, cudaMemcpyHostToDevice);
+
+  // ... async!
+  cudaStream_t stream;
+  err = cudaStreamCreate(&stream);
   SANITY_CHECK(err);
-  err = cudaMemcpy2D(amplitudes_device, sizeof(complex_t),
+  err = cudaMemcpy2DAsync(states_device, sizeof(uint64_t),
+    &qreg->states[0].state, sizeof(uint64_t) + sizeof(complex_t),
+    sizeof(uint64_t), qreg->num_states, cudaMemcpyHostToDevice, stream);
+  SANITY_CHECK(err);
+  err = cudaMemcpy2DAsync(amplitudes_device, sizeof(complex_t),
     &qreg->states[0].amplitude, sizeof(uint64_t) + sizeof(complex_t),
-    sizeof(complex_t), qreg->num_states, cudaMemcpyHostToDevice);
+    sizeof(complex_t), qreg->num_states, cudaMemcpyHostToDevice, stream);
   SANITY_CHECK(err);
   qreg_host.states = states_device;
   qreg_host.amplitudes = amplitudes_device;
 
   // Copy over the device pointer for qreg
-  err = cudaMemcpy(qreg_device, &qreg_host, sizeof(cuda_quantum_reg),
-    cudaMemcpyHostToDevice);
+  err = cudaMemcpyAsync(qreg_device, &qreg_host, sizeof(cuda_quantum_reg),
+    cudaMemcpyHostToDevice, stream);
+  SANITY_CHECK(err);
+
+  // Note for when we can stop waiting
+  cudaEvent_t gate;
+  err = cudaEventCreate(&gate);
   SANITY_CHECK(err);
 
   // Invoke the kernel
-  dim3 localSize(1, 1, 1);
+  dim3 localSize(128, 1, 1);
   dim3 globalSize(1, 1, 1);
-  cuda_quantum_fourier_kernel<<<globalSize, localSize>>>(qreg_device);
+  cuda_quantum_fourier_kernel<<<globalSize, localSize, 0, stream>>>(qreg_device);
   SANITY_CHECK(cudaGetLastError());
   // Free the memory locally (we'll replace it slightly later)
+  err = cudaStreamWaitEvent(stream, gate, 0);
+  SANITY_CHECK(err);
+  err = cudaEventDestroy(gate);
+  SANITY_CHECK(err);
   free(qreg->states);
 
   // Copy back the device pointer
-  err = cudaMemcpy(&qreg_host, qreg_device, sizeof(cuda_quantum_reg),
-    cudaMemcpyDeviceToHost);
+  err = cudaMemcpyAsync(&qreg_host, qreg_device, sizeof(cuda_quantum_reg),
+    cudaMemcpyDeviceToHost, stream);
   SANITY_CHECK(err);
   qreg->size = qreg->num_states = qreg_host.num_states;
   // ... and the states
   qreg->states = (quantum_state_t*)malloc(sizeof(quantum_state_t) * qreg->num_states);
-  err = cudaMemcpy2D(&qreg->states[0].state, sizeof(uint64_t) + sizeof(complex_t),
+  err = cudaMemcpy2DAsync(&qreg->states[0].state,
+    sizeof(uint64_t) + sizeof(complex_t),
     states_device, sizeof(uint64_t),
-    sizeof(uint64_t), qreg->num_states, cudaMemcpyDeviceToHost);
+    sizeof(uint64_t), qreg->num_states, cudaMemcpyDeviceToHost, stream);
   SANITY_CHECK(err);
-  err = cudaMemcpy2D(&qreg->states[0].amplitude, sizeof(uint64_t) + sizeof(complex_t),
+  err = cudaMemcpy2DAsync(&qreg->states[0].amplitude,
+    sizeof(uint64_t) + sizeof(complex_t),
     amplitudes_device, sizeof(complex_t),
-    sizeof(complex_t), qreg->num_states, cudaMemcpyDeviceToHost);
+    sizeof(complex_t), qreg->num_states, cudaMemcpyDeviceToHost, stream);
+  SANITY_CHECK(err);
+
+  err = cudaStreamSynchronize(stream);
+  SANITY_CHECK(err);
+  err = cudaStreamDestroy(stream);
   SANITY_CHECK(err);
 }

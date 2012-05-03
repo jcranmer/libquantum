@@ -3,12 +3,25 @@
 #define FOR_EACH_STATE(qreg, i) \
   for (i = blockIdx.x * blockDim.x + threadIdx.x; i < qreg->num_states; \
       i += blockDim.x * gridDim.x)
+#define STATE(qreg, i) qreg->states[i]
+#define AMPLITUDE(qreg, i) qreg->amplitudes[i]
+
 #include "quantum_reg.h"
 #include "complex.c"
+typedef struct {
+  int num_states;
+  int size;
+  int qubits;
+  uint64_t *states;
+  complex_t *amplitudes;
+} cuda_quantum_reg;
+
+#define quantum_reg cuda_quantum_reg
 #include "quantum_gates.c"
+#undef quantum_reg
 
 // Magic for hadamard gate
-__device__ int quda_quantum_hadamard_gate(int target, quantum_reg* qreg) {
+__device__ int quda_quantum_hadamard_gate(int target, cuda_quantum_reg* qreg) {
 	// If needed, enlarge qreg to make room for state splits resulting from this gate
   int states = qreg->num_states;
   if (2 * states > qreg->size) {
@@ -20,33 +33,29 @@ __device__ int quda_quantum_hadamard_gate(int target, quantum_reg* qreg) {
 	int i;
 	FOR_EACH_STATE(qreg, i) {
 		// Flipped state must be created
-		qreg->states[qreg->num_states+i].state = qreg->states[i].state ^ mask;
+		STATE(qreg, qreg->num_states+i) = STATE(qreg, i) ^ mask;
 		// For this state, must just modify amplitude
-		qreg->states[i].amplitude = quda_complex_rmul(qreg->states[i].amplitude,
+		AMPLITUDE(qreg, i) = quda_complex_rmul(AMPLITUDE(qreg, i),
 				ONE_OVER_SQRT_2);
 		// Copy amplitude to created state
-		qreg->states[qreg->num_states+i].amplitude = qreg->states[i].amplitude;
+		AMPLITUDE(qreg, qreg->num_states+i) = AMPLITUDE(qreg, i);
 
-		if(qreg->states[i].state & mask) {
-			qreg->states[i].amplitude = quda_complex_neg(qreg->states[i].amplitude);
+		if(STATE(qreg, i) & mask) {
+			AMPLITUDE(qreg, i) = quda_complex_neg(AMPLITUDE(qreg, i));
 		}
 	}
+
 
   __syncthreads();
   if (blockIdx.x == 0 && threadIdx.x == 0)
   	qreg->num_states = 2*states;
   __syncthreads();
 
-	// TODO: Ideally, make this call optional or conditional
-	quda_quantum_reg_coalesce(qreg);
-
 	return 0;
 }
-__device__ void quda_quantum_reg_coalesce(quantum_reg *qreg) {
-  __syncthreads();
-}
 
-__global__ void cuda_quantum_fourier_kernel(quantum_reg *qreg) {
+#include <stdio.h>
+__global__ void cuda_quantum_fourier_kernel(cuda_quantum_reg *qreg) {
 	int q = qreg->qubits-1;
 	int i,j;
 	for(i=q;i>=0;i--) {
@@ -70,7 +79,6 @@ __global__ void cuda_quantum_fourier_kernel(quantum_reg *qreg) {
 	}
 }
 
-#include <stdio.h>
 #define SANITY_CHECK(err) \
   do { \
     cudaError_t err__ = err; \
@@ -81,27 +89,39 @@ __global__ void cuda_quantum_fourier_kernel(quantum_reg *qreg) {
     } \
   } while (0)
 extern "C" void quda_cu_quantum_fourier_transform(quantum_reg* qreg) {
-  quantum_state_t *qstates_device;
-  quantum_reg qreg_host = *qreg, *qreg_device;
+  uint64_t *states_device;
+  complex_t *amplitudes_device;
+  cuda_quantum_reg qreg_host, *qreg_device;
   cudaError_t err;
 
   // Copy over the states to the device
-  err = cudaMalloc(&qstates_device, 1LL << qreg->size);
+  qreg_host.size = 1 << qreg->qubits;
+  qreg_host.num_states = qreg->num_states;
+  qreg_host.qubits = qreg->qubits;
+  err = cudaMalloc(&states_device, sizeof(uint64_t) * qreg_host.size);
   SANITY_CHECK(err);
-  err = cudaMalloc(&qreg_device, sizeof(quantum_reg));
+  err = cudaMalloc(&amplitudes_device, sizeof(complex_t) * qreg_host.size);
   SANITY_CHECK(err);
-  err = cudaMemcpy(qstates_device, qreg->states,
-    qreg->num_states * sizeof(quantum_state_t), cudaMemcpyHostToDevice);
+  err = cudaMalloc(&qreg_device, sizeof(cuda_quantum_reg));
   SANITY_CHECK(err);
-  qreg_host.states = qstates_device;
+  err = cudaMemcpy2D(states_device, sizeof(uint64_t),
+    &qreg->states[0].state, sizeof(uint64_t) + sizeof(complex_t),
+    sizeof(uint64_t), qreg->num_states, cudaMemcpyHostToDevice);
+  SANITY_CHECK(err);
+  err = cudaMemcpy2D(amplitudes_device, sizeof(complex_t),
+    &qreg->states[0].amplitude, sizeof(uint64_t) + sizeof(complex_t),
+    sizeof(complex_t), qreg->num_states, cudaMemcpyHostToDevice);
+  SANITY_CHECK(err);
+  qreg_host.states = states_device;
+  qreg_host.amplitudes = amplitudes_device;
 
   // Copy over the device pointer for qreg
-  err = cudaMemcpy(qreg_device, &qreg_host, sizeof(quantum_reg),
+  err = cudaMemcpy(qreg_device, &qreg_host, sizeof(cuda_quantum_reg),
     cudaMemcpyHostToDevice);
   SANITY_CHECK(err);
 
   // Invoke the kernel
-  dim3 localSize(128, 1, 1);
+  dim3 localSize(1, 1, 1);
   dim3 globalSize(1, 1, 1);
   cuda_quantum_fourier_kernel<<<globalSize, localSize>>>(qreg_device);
   SANITY_CHECK(cudaGetLastError());
@@ -109,12 +129,18 @@ extern "C" void quda_cu_quantum_fourier_transform(quantum_reg* qreg) {
   free(qreg->states);
 
   // Copy back the device pointer
-  err = cudaMemcpy(qreg, qreg_device, sizeof(quantum_reg),
+  err = cudaMemcpy(&qreg_host, qreg_device, sizeof(cuda_quantum_reg),
     cudaMemcpyDeviceToHost);
   SANITY_CHECK(err);
+  qreg->size = qreg->num_states = qreg_host.num_states;
   // ... and the states
   qreg->states = (quantum_state_t*)malloc(sizeof(quantum_state_t) * qreg->num_states);
-  err = cudaMemcpy(qreg->states, qstates_device,
-    sizeof(quantum_state_t) * qreg->num_states, cudaMemcpyDeviceToHost);
+  err = cudaMemcpy2D(&qreg->states[0].state, sizeof(uint64_t) + sizeof(complex_t),
+    states_device, sizeof(uint64_t),
+    sizeof(uint64_t), qreg->num_states, cudaMemcpyDeviceToHost);
+  SANITY_CHECK(err);
+  err = cudaMemcpy2D(&qreg->states[0].amplitude, sizeof(uint64_t) + sizeof(complex_t),
+    amplitudes_device, sizeof(complex_t),
+    sizeof(complex_t), qreg->num_states, cudaMemcpyDeviceToHost);
   SANITY_CHECK(err);
 }

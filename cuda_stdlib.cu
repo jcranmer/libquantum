@@ -1,18 +1,49 @@
 #define QUDA_GATE __device__
+#define CUSTOM_HADAMARD
+#define FOR_EACH_STATE(qreg, i) \
+  for (i = blockIdx.x * blockDim.x + threadIdx.x; i < qreg->num_states; \
+      i += blockDim.x * gridDim.x)
 #include "quantum_reg.h"
 #include "complex.c"
 #include "quantum_gates.c"
 
 // Magic for hadamard gate
-__device__ int quda_quantum_reg_enlarge(quantum_reg *qreg, int amount) {
-  if (qreg->size < amount) {
+__device__ int quda_quantum_hadamard_gate(int target, quantum_reg* qreg) {
+	// If needed, enlarge qreg to make room for state splits resulting from this gate
+  int states = qreg->num_states;
+  if (2 * states > qreg->size) {
     *((volatile int *)0) = 0;
     return -1;
   }
-  return 0;
-}
 
+	uint64_t mask = 1 << target;
+	int i;
+	FOR_EACH_STATE(qreg, i) {
+		// Flipped state must be created
+		qreg->states[qreg->num_states+i].state = qreg->states[i].state ^ mask;
+		// For this state, must just modify amplitude
+		qreg->states[i].amplitude = quda_complex_rmul(qreg->states[i].amplitude,
+				ONE_OVER_SQRT_2);
+		// Copy amplitude to created state
+		qreg->states[qreg->num_states+i].amplitude = qreg->states[i].amplitude;
+
+		if(qreg->states[i].state & mask) {
+			qreg->states[i].amplitude = quda_complex_neg(qreg->states[i].amplitude);
+		}
+	}
+
+  __syncthreads();
+  if (blockIdx.x == 0 && threadIdx.x == 0)
+  	qreg->num_states = 2*states;
+  __syncthreads();
+
+	// TODO: Ideally, make this call optional or conditional
+	quda_quantum_reg_coalesce(qreg);
+
+	return 0;
+}
 __device__ void quda_quantum_reg_coalesce(quantum_reg *qreg) {
+  __syncthreads();
 }
 
 __global__ void cuda_quantum_fourier_kernel(quantum_reg *qreg) {
@@ -70,7 +101,7 @@ extern "C" void quda_cu_quantum_fourier_transform(quantum_reg* qreg) {
   SANITY_CHECK(err);
 
   // Invoke the kernel
-  dim3 localSize(1, 1, 1);
+  dim3 localSize(128, 1, 1);
   dim3 globalSize(1, 1, 1);
   cuda_quantum_fourier_kernel<<<globalSize, localSize>>>(qreg_device);
   SANITY_CHECK(cudaGetLastError());

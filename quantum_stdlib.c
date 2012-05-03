@@ -86,6 +86,7 @@ int quda_quantum_hadamard_all(quantum_reg* qreg) {
 void quda_quantum_fourier_transform(quantum_reg* qreg) {
 	int q = qreg->qubits-1;
 	int i,j;
+  printf("Number of states: %d\n", qreg->num_states);
 	for(i=q;i>=0;i--) {
 		for(j=q;j>i;j--) {
 			#ifdef QUDA_STDLIB_DEBUG
@@ -97,6 +98,7 @@ void quda_quantum_fourier_transform(quantum_reg* qreg) {
 		printf("Performing hadamard(bit %d)\n",i); // DEBUG
 		#endif
 		quda_quantum_hadamard_gate(i,qreg);
+  printf("Number of states after hadamard %d: %d\n", i, qreg->num_states);
 	}
 
 	// TODO: Consider using SWAP gate here instead

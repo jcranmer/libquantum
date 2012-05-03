@@ -52,6 +52,7 @@ int main(int argc, char** argv) {
 
 	printf("N = %i, %i qubits required\n", N, width+L);
 
+  clock_t start = clock(), end;
 	quantum_reg qr1;
 	quda_quantum_reg_init(&qr1,width);
 	quda_quantum_reg_set(&qr1,0);
@@ -118,6 +119,9 @@ int main(int argc, char** argv) {
 	} else {
 		printf("Could not determine factors.\n");
 	}
+
+  end = clock();
+  printf("Took %.3f seconds\n", (end-start)/(float)(CLOCKS_PER_SEC));
 
 	quda_quantum_reg_delete(&qr1);
 

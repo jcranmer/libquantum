@@ -6,6 +6,7 @@
 #define STATE(qreg, i) qreg->states[i]
 #define AMPLITUDE(qreg, i) qreg->amplitudes[i]
 
+#include <stdio.h>
 #include "quantum_reg.h"
 #include "complex.c"
 typedef struct {
@@ -14,11 +15,22 @@ typedef struct {
   int qubits;
   uint64_t *states;
   complex_t *amplitudes;
+  int barrier_target;
 } cuda_quantum_reg;
 
 #define quantum_reg cuda_quantum_reg
 #include "quantum_gates.c"
 #undef quantum_reg
+
+volatile __device__ int g_mutex;
+__device__ void global_barrier(int target) {
+  //__syncthreads();
+  if (threadIdx.x == 0) {
+    atomicAdd((int*)&g_mutex, 1);
+    while (g_mutex < target);
+  }
+  __syncthreads();
+}
 
 // Magic for hadamard gate
 __device__ int quda_quantum_hadamard_gate(int target, cuda_quantum_reg* qreg) {
@@ -46,28 +58,31 @@ __device__ int quda_quantum_hadamard_gate(int target, cuda_quantum_reg* qreg) {
 	}
 
 
-  __syncthreads();
+  int barrier_target = qreg->barrier_target;
+  global_barrier(barrier_target += gridDim.x);
   if (blockIdx.x == 0 && threadIdx.x == 0)
   	qreg->num_states = 2*states;
-  __syncthreads();
+  global_barrier(barrier_target += gridDim.x);
+  if (threadIdx.x == 0)
+    qreg->barrier_target = barrier_target;
 
 	return 0;
 }
 
-#include <stdio.h>
+#if __CUDA_ARCH__ >= 200
+#define QUDA_STDLIB_DEBUG
+#endif
 __global__ void cuda_quantum_fourier_kernel(cuda_quantum_reg *qreg) {
 	int q = qreg->qubits-1;
 	int i,j;
 	for(i=q;i>=0;i--) {
+		#ifdef QUDA_STDLIB_DEBUG
+    if (threadIdx.x == 0 && blockIdx.x == 0)
+  		printf("Performing hadamard(bit %d)\n",i); // DEBUG
+		#endif
 		for(j=q;j>i;j--) {
-			#ifdef QUDA_STDLIB_DEBUG
-			printf("Performing c-R_%d (PI/%lu) on (%d,%d)\n",j-i+1,(uint64_t)1 << (j-i),j,i); // DEBUG
-			#endif
 			quda_quantum_controlled_rotate_k_gate(j,i,qreg,j-i+1);
 		}
-		#ifdef QUDA_STDLIB_DEBUG
-		printf("Performing hadamard(bit %d)\n",i); // DEBUG
-		#endif
 		quda_quantum_hadamard_gate(i,qreg);
 	}
 
@@ -89,15 +104,17 @@ __global__ void cuda_quantum_fourier_kernel(cuda_quantum_reg *qreg) {
     } \
   } while (0)
 extern "C" void quda_cu_quantum_fourier_transform(quantum_reg* qreg) {
+  static int barrier_target = 0;
   uint64_t *states_device;
   complex_t *amplitudes_device;
   cuda_quantum_reg qreg_host, *qreg_device;
   cudaError_t err;
 
   // Copy over the states to the device
-  qreg_host.size = 1 << qreg->qubits;
+  qreg_host.size = 1000000;
   qreg_host.num_states = qreg->num_states;
   qreg_host.qubits = qreg->qubits;
+  qreg_host.barrier_target = barrier_target;
   err = cudaMalloc(&states_device, sizeof(uint64_t) * qreg_host.size);
   SANITY_CHECK(err);
   err = cudaMalloc(&amplitudes_device, sizeof(complex_t) * qreg_host.size);
@@ -132,7 +149,7 @@ extern "C" void quda_cu_quantum_fourier_transform(quantum_reg* qreg) {
 
   // Invoke the kernel
   dim3 localSize(128, 1, 1);
-  dim3 globalSize(1, 1, 1);
+  dim3 globalSize(30, 1, 1);
   cuda_quantum_fourier_kernel<<<globalSize, localSize, 0, stream>>>(qreg_device);
   SANITY_CHECK(cudaGetLastError());
   // Free the memory locally (we'll replace it slightly later)
@@ -164,4 +181,10 @@ extern "C" void quda_cu_quantum_fourier_transform(quantum_reg* qreg) {
   SANITY_CHECK(err);
   err = cudaStreamDestroy(stream);
   SANITY_CHECK(err);
+
+  err = cudaFree(states_device);
+  SANITY_CHECK(err);
+  err = cudaFree(amplitudes_device);
+  SANITY_CHECK(err);
+  barrier_target = qreg_host.barrier_target;
 }

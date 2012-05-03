@@ -13,9 +13,11 @@ typedef struct complex_t {
 	float imag;
 } complex_t;
 
+#ifndef QUDA_GATE
 extern const complex_t QUDA_I;
 extern const complex_t QUDA_COMPLEX_ZERO;
 extern const complex_t QUDA_COMPLEX_ONE;
+#endif
 
 #ifdef __QUDA_USE_BRANCH_CUT
 /* The standard branch cut is defined as (-PI,PI] */

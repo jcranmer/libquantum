@@ -277,12 +277,12 @@ void quda_quantum_reg_prune(quantum_reg* qreg) {
 	}
 }
 
-int quda_quantum_reg_enlarge(quantum_reg* qreg,int* amount) {
+int quda_quantum_reg_enlarge(quantum_reg* qreg,int amount) {
 	int increase;
-	if(amount == NULL) {
+	if(amount < 0) {
 		increase = qreg->size;
 	} else {
-		increase = *amount;
+		increase = amount;
 	}
 
 	quantum_state_t* temp_states = malloc((qreg->size+increase)*sizeof(quantum_state_t));

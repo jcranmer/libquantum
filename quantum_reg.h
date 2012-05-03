@@ -114,7 +114,7 @@ void quda_quantum_reg_prune(quantum_reg* qreg);
  * Returns 0 on success or -1 if allocation fails.
  * Simultaneously prunes zero-amplitude states from the arraylist on copy.
  */
-int quda_quantum_reg_enlarge(quantum_reg* qreg,int* amount);
+int quda_quantum_reg_enlarge(quantum_reg* qreg,int amount);
 
 /* Attempts to merge any identical states present in the register.
  * Simultaneously prunes zero-amplitude states from the register.

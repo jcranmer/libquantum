@@ -6,7 +6,10 @@
 #include <time.h>
 #include <math.h>
 #include "quantum_stdlib.h"
+#include "cuda_stdlib.h"
 #include "shor.h"
+
+int use_cuda = 0;
 
 /* TODO: Change input parsing and/or accepted parameters
  * Currently mirrors libquantum's formatting exactly to allow correctness testing.
@@ -14,9 +17,13 @@
  */
 int main(int argc, char** argv) {
 	if(argc == 1) {
-		printf("Usage: sim [number]\n\n");
+		printf("Usage: sim [number] [rand] [use_cuda]\n\n");
 		return 3;
 	}
+
+  if (argc > 3) {
+    use_cuda = atoi(argv[2]);
+  }
 
 	int N = atoi(argv[1]);
 
@@ -62,7 +69,10 @@ int main(int argc, char** argv) {
 	 */
 	quda_quantum_collapse_scratch(&qr1);
 
-	quda_quantum_fourier_transform(&qr1);
+  if (use_cuda)
+    quda_cu_quantum_fourier_transform(&qr1);
+  else
+    quda_quantum_fourier_transform(&qr1);
 
 	uint64_t result;
 	int res = quda_quantum_reg_measure_and_collapse(&qr1,&result);

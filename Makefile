@@ -19,11 +19,16 @@ quantum_gates.o: quantum_gates.c quantum_gates.h complex.h
 quantum_stdlib.o: quantum_stdlib.c quantum_stdlib.h quantum_reg.h quantum_gates.h complex.h
 	$(CC) $(CFLAGS) -c quantum_stdlib.c
 
+%.o: %.cu
+	nvcc -gencode=arch=compute_13,code=\"sm_13,compute_13\" \
+		-gencode=arch=compute_20,code=\"sm_20,compute_20\" -o $@ -m64 \
+		-c $< -DUNIX -O2 -I/usr/local/cuda/include
+
 test: libquantum.a test.c complex.h quantum_reg.h quantum_gates.h
 	$(CC) $(CFLAGS) $(LDFLAGS) -o test test.c libquantum.a
 
-shor: libquantum.a shor.c shor.h quantum_stdlib.h quantum_reg.h
-	$(CC) $(CFLAGS) $(LDFLAGS) -o shor shor.c libquantum.a
+shor: libquantum.a shor.c shor.h quantum_stdlib.h quantum_reg.h cuda_stdlib.o
+	$(CC) $(CFLAGS) $(LDFLAGS) -o shor shor.c libquantum.a cuda_stdlib.o -lcudart
 
 check: test
 	@echo ./test
@@ -31,4 +36,4 @@ check: test
 	if [ $$? = 0 ]; then exit 1; else exit 0; fi
 
 clean:
-	rm test libquantum.a *.o
+	rm -f test libquantum.a *.o

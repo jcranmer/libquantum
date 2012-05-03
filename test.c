@@ -61,7 +61,7 @@ do { \
   /* How does it map the uniform state? */ \
   complex_t uniform[1 << nbits]; \
   int newsize = (1 << nbits) - qureg.size; \
-  quda_quantum_reg_enlarge(&qureg, &newsize); \
+  quda_quantum_reg_enlarge(&qureg, newsize); \
   qureg.num_states = 1 << nbits; \
   float sum = 0.0f; \
   for (int i = 0; i < (1 << nbits); i++) { \
@@ -153,7 +153,7 @@ int main(int argc, char** argv) {
 	if(quda_quantum_reg_init(&qreg,16) == -1) return -1;
 
 	quda_quantum_reg_set(&qreg,42);
-	if(quda_quantum_reg_enlarge(&qreg,NULL) == -1) return -1;
+	if(quda_quantum_reg_enlarge(&qreg, -1) == -1) return -1;
 
 	quda_quantum_reg_trim(&qreg);
 	quda_quantum_reg_delete(&qreg);
